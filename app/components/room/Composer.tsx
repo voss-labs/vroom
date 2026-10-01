@@ -11,9 +11,10 @@ export interface ComposerProps {
   connected: boolean;
   /** Returns false when the socket refused the frame; the input then keeps it. */
   onSend: (body: string) => boolean;
+  placeholder?: string;
 }
 
-export function Composer({ killed, connected, onSend }: ComposerProps) {
+export function Composer({ killed, connected, onSend, placeholder }: ComposerProps) {
   const [value, setValue] = useState("");
   const disabled = killed || !connected;
   const counting = value.length > COUNTER_FROM;
@@ -28,7 +29,7 @@ export function Composer({ killed, connected, onSend }: ComposerProps) {
   return (
     <form className="composer" onSubmit={submit}>
       <label className="sr" htmlFor="msg">
-        Message Campus Live
+        Message
       </label>
       <div className="relative flex min-w-0 flex-1">
         <input
@@ -38,7 +39,7 @@ export function Composer({ killed, connected, onSend }: ComposerProps) {
           maxLength={LIMIT}
           disabled={disabled}
           placeholder={
-            killed ? "The room is closed" : "Say something to the college"
+            killed ? "The room is closed" : (placeholder || "Say something to the college")
           }
           value={value}
           onChange={(event) => setValue(event.target.value.slice(0, LIMIT))}

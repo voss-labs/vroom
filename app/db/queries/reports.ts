@@ -14,6 +14,7 @@ export interface ReportView {
   reason: string | null;
   handle: string | null;
   reportedMemberId: string;
+  roomId: string;
   status: string;
   createdAt: Date;
 }
@@ -25,6 +26,7 @@ const REPORT_COLUMNS = {
   reason: reports.reason,
   handle: reportedMember.pseudonym,
   reportedMemberId: reports.reportedMemberId,
+  roomId: reports.roomId,
   status: reports.status,
   createdAt: reports.createdAt,
 } as const;

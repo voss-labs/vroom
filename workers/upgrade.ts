@@ -1,6 +1,6 @@
 import { verifyAppToken } from "~/lib/app-token.server";
+import { isValidRoomId } from "~/lib/rooms";
 
-import { ROOM_ID } from "./env";
 import { CLOSE, PROTOCOL_ID } from "./protocol";
 import { PSEUDONYM_HEADER } from "./room-do";
 
@@ -58,8 +58,8 @@ export async function handleUpgrade(
   }
 
   const url = new URL(request.url);
-  const room = url.searchParams.get("room") || ROOM_ID();
-  if (room !== ROOM_ID()) {
+  const room = url.searchParams.get("room");
+  if (!room || !isValidRoomId(room)) {
     return reject(CLOSE.BAD_TOKEN, "unknown room");
   }
 

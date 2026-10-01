@@ -17,8 +17,10 @@ export class RoomUnreachable extends Error {
   }
 }
 
-export function roomId(): string {
-  return process.env.ROOM_ID || "campus-live";
+export async function getRoom(roomId: string): Promise<DurableObjectStub<RoomDurableObject>> {
+  const namespace = await getNamespace();
+  if (!namespace) throw new RoomUnreachable();
+  return namespace.get(namespace.idFromName(roomId));
 }
 
 let namespacePromise:
@@ -30,22 +32,17 @@ function getNamespace() {
     .catch(() => undefined));
 }
 
-export async function getRoom(): Promise<DurableObjectStub<RoomDurableObject>> {
-  const namespace = await getNamespace();
-  if (!namespace) throw new RoomUnreachable();
-  return namespace.get(namespace.idFromName(roomId()));
-}
-
 /**
  * The console's live numbers are Durable Object reads, so they degrade to null
  * when the object is unreachable rather than taking the report queue down with
  * them.
  */
 export async function tryRoom<T>(
+  roomId: string,
   fn: (room: DurableObjectStub<RoomDurableObject>) => Promise<T>,
 ) {
   try {
-    return await fn(await getRoom());
+    return await fn(await getRoom(roomId));
   } catch (error) {
     console.error("[room] unreachable:", error);
     return null;

@@ -18,7 +18,7 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await getSessionUser(request);
-  if (user) throw redirect("/room");
+  if (user) throw redirect("/room/campus-live");
   return {};
 }
 
@@ -82,7 +82,7 @@ function SignInButton() {
     setPending(true);
     setError(null);
     try {
-      await signInWithVAuth("/room");
+      await signInWithVAuth("/room/campus-live");
     } catch {
       // The redirect never happened, so the user is still here and needs telling.
       setError("Could not reach V Auth. Check your connection and try again.");

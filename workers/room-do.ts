@@ -63,7 +63,9 @@ export class RoomDurableObject extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment(attachment);
 
-    this.onJoin(server, pseudonym);
+    const url = new URL(request.url);
+    const room = url.searchParams.get("room") || "campus-live";
+    this.onJoin(server, pseudonym, room);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -76,7 +78,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  private onJoin(server: WebSocket, pseudonym: string): void {
+  private onJoin(server: WebSocket, pseudonym: string, room: string): void {
     const state = db.readRoomState(this.sql);
     const page = db.recentMessages(this.sql, PAGE_SIZE);
     const members = this.members();
@@ -86,7 +88,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     this.sendTo(server, {
       t: "ready",
       pseudonym,
-      room: this.env.ROOM_ID ?? "campus-live",
+      room,
       killed: state.killed,
       count: members.length,
       members,

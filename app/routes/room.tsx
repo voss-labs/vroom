@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, redirect } from "react-router";
 
 import type { Route } from "./+types/room";
 import { Composer } from "~/components/room/Composer";
@@ -10,7 +10,6 @@ import { MessageList } from "~/components/room/MessageList";
 import { RoomRail } from "~/components/room/RoomRail";
 import { ensurePseudonym } from "~/lib/membership.server";
 import { requireSession } from "~/lib/require-role.server";
-import { roomId } from "~/lib/room.server";
 import {
   loadBlocked,
   RoomConnection,
@@ -18,24 +17,32 @@ import {
   type ConnectionState as SocketState,
   type LogEntry,
 } from "~/lib/room-client";
+import { ROOMS, isValidRoomId } from "~/lib/rooms";
 import { cn } from "~/lib/utils";
 import type { Msg, SystemTone } from "../../workers/protocol";
 
-export function meta(_: Route.MetaArgs) {
+export function meta({ data }: Route.MetaArgs) {
+  if (!data?.roomMeta) return [];
   return [
-    { title: "Campus Live - V Rooms" },
-    { name: "description", content: "One room, the whole college." },
+    { title: `${data.roomMeta.name} - V Rooms` },
+    { name: "description", content: data.roomMeta.subtitle },
   ];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request, params }: Route.LoaderArgs) {
+  const roomId = params.roomId;
+  if (!roomId || !isValidRoomId(roomId)) {
+    throw redirect("/room/campus-live");
+  }
+
   const actor = await requireSession(request);
   const member = await ensurePseudonym(actor.member);
 
   return {
     pseudonym: member.pseudonym ?? "",
     isModerator: actor.member.isModerator,
-    room: roomId(),
+    roomId,
+    roomMeta: ROOMS[roomId],
   };
 }
 
@@ -85,7 +92,7 @@ export default function RoomRoute({ loaderData }: Route.ComponentProps) {
   /* ---------------- the socket ---------------- */
 
   useEffect(() => {
-    const socket = new RoomConnection({
+    const socket = new RoomConnection(loaderData.roomId, {
       onState: setStatus,
 
       onReady(ready) {
@@ -152,7 +159,7 @@ export default function RoomRoute({ loaderData }: Route.ComponentProps) {
       socket.stop();
       connection.current = null;
     };
-  }, [pushSystem]);
+  }, [pushSystem, loaderData.roomId]);
 
   /* ---------------- blocking, presentation only ---------------- */
 
@@ -190,7 +197,7 @@ export default function RoomRoute({ loaderData }: Route.ComponentProps) {
           method: "POST",
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ messageId: msg.id }),
+          body: JSON.stringify({ messageId: msg.id, roomId: loaderData.roomId }),
         });
         if (!response.ok) throw new Error(`report ${response.status}`);
         pushSystem(
@@ -261,8 +268,8 @@ export default function RoomRoute({ loaderData }: Route.ComponentProps) {
         </div>
 
         <nav className="tabs" aria-label="View">
-          <Link to="/room" className="tab" aria-current="page">
-            Campus Live
+          <Link to={`/room/${loaderData.roomId}`} className="tab" aria-current="page">
+            {loaderData.roomMeta.name}
           </Link>
           {loaderData.isModerator ? (
             <Link to="/mod" className="tab">
@@ -300,12 +307,13 @@ export default function RoomRoute({ loaderData }: Route.ComponentProps) {
           pseudonym={pseudonym}
           blockCount={blocked.size}
           onClearBlocks={handleClearBlocks}
+          activeRoomId={loaderData.roomId}
         />
 
         <main className="chat">
           <div className="chat-head">
-            <span className="chat-title">#campus-live</span>
-            <span className="chat-sub">one room, the whole college</span>
+            <span className="chat-title">#{loaderData.roomMeta.id}</span>
+            <span className="chat-sub">{loaderData.roomMeta.subtitle}</span>
             <span className="chat-state" aria-live="polite">
               <ConnectionState state={status} killed={killed} />
             </span>
@@ -323,12 +331,16 @@ export default function RoomRoute({ loaderData }: Route.ComponentProps) {
             onBackfill={handleBackfill}
             onReport={handleReport}
             onBlock={handleBlock}
+            roomName={loaderData.roomMeta.name}
+            roomSubtitle={loaderData.roomMeta.subtitle}
+            roomEmptyStateMessage={loaderData.roomMeta.emptyStateMessage}
           />
 
           <Composer
             killed={killed}
             connected={status === "open"}
             onSend={handleSend}
+            placeholder={loaderData.roomMeta.placeholder}
           />
         </main>
 

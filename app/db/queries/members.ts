@@ -1,7 +1,7 @@
 import { and, eq, isNull, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "~/db";
-import { members } from "~/db/schema";
+import { members, user } from "~/db/schema";
 
 /**
  * Explicit column lists everywhere. A bare `select()` on `members` is fine
@@ -76,6 +76,18 @@ export async function findAnyMemberByUserId(
 export async function ensureMember(userId: string): Promise<MemberRecord> {
   const existing = await findMemberByUserId(userId);
   if (existing) return existing;
+
+  // TODO: Re-enable auth
+  if (userId === "dev-user") {
+    await db.insert(user).values({
+      id: "dev-user",
+      name: "Local Dev",
+      email: "dev@vit.edu.in",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+  }
 
   const rows = await db
     .insert(members)

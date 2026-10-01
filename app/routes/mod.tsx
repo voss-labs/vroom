@@ -82,9 +82,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     listAudit(100),
     countOpenReports(),
     countSuspended(),
-    tryRoom((room) => room.stats()),
-    tryRoom((room) => room.getRoomState()),
-    tryRoom((room) => room.countsByPseudonym()),
+    tryRoom("campus-live", (room) => room.stats()),
+    tryRoom("campus-live", (room) => room.getRoomState()),
+    tryRoom("campus-live", (room) => room.countsByPseudonym()),
   ]);
 
   // No email leaves this function. `reveal` is a POST and nothing else (VRIP-08).

@@ -21,6 +21,9 @@ export interface MessageListProps {
   onBackfill: () => void;
   onReport: (msg: Msg) => void;
   onBlock: (who: string) => void;
+  roomName: string;
+  roomSubtitle: string;
+  roomEmptyStateMessage: string;
 }
 
 /**
@@ -41,6 +44,9 @@ export function MessageList({
   onBackfill,
   onReport,
   onBlock,
+  roomName,
+  roomSubtitle,
+  roomEmptyStateMessage,
 }: MessageListProps) {
   const logRef = useRef<HTMLDivElement | null>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -104,14 +110,14 @@ export function MessageList({
         className="log"
         role="log"
         aria-live="polite"
-        aria-label="Campus Live messages"
+        aria-label={`${roomName} messages`}
         onScroll={handleScroll}
       >
         {loadingMore ? (
           <div className="sys">loading earlier messages</div>
         ) : null}
         {!loadingMore && !hasMore && hasMessages ? (
-          <div className="sys">this is the beginning of Campus Live</div>
+          <div className="sys">this is the beginning of {roomName}</div>
         ) : null}
 
         {entries.map((entry) =>
@@ -136,7 +142,7 @@ export function MessageList({
         )}
 
         {joining && !hasMessages ? (
-          <div className="empty">joining Campus Live</div>
+          <div className="empty">joining {roomName}</div>
         ) : null}
         {!joining && !hasMessages ? (
           <div className="empty">
@@ -144,7 +150,7 @@ export function MessageList({
               Nobody has said anything yet. You could be first.
             </p>
             <p className="mt-1 mb-0">
-              One room, the whole college, and an empty screen.
+              {roomEmptyStateMessage}
             </p>
           </div>
         ) : null}

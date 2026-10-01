@@ -9,8 +9,8 @@ import {
 } from "~/lib/membership.server";
 import { mintAppToken } from "~/lib/app-token.server";
 import { isSameOrigin } from "~/lib/origin.server";
-import { roomId } from "~/lib/room.server";
 import { socketUrl } from "~/lib/room-client";
+import { isValidRoomId } from "~/lib/rooms";
 
 /**
  * Mints the app token. Same-origin and session required, pseudonym assigned on
@@ -55,7 +55,18 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!pseudonym)
     return fail("pseudonym_unavailable", "Could not assign a handle.", 503);
 
-  const room = roomId();
+  let room;
+  try {
+    const body = await request.json();
+    room = body.roomId;
+  } catch {
+    room = null;
+  }
+
+  if (!room || typeof room !== "string" || !isValidRoomId(room)) {
+    return fail("invalid_room", "Invalid room ID.", 400);
+  }
+
   const expiresIn = Number(process.env.APP_JWT_TTL_SECONDS) || 900;
   const token = await mintAppToken({ pseudonym, room }, expiresIn);
 

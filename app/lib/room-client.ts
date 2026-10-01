@@ -76,7 +76,10 @@ export class RoomConnection {
   private stopped = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private readonly handlers: RoomHandlers) {}
+  constructor(
+    private readonly roomId: string,
+    private readonly handlers: RoomHandlers,
+  ) {}
 
   start(): void {
     this.stopped = false;
@@ -109,7 +112,13 @@ export class RoomConnection {
     let token: string;
     let wsUrl: string;
     try {
-      const response = await fetch("/api/socket-token", { method: "POST" });
+      const response = await fetch("/api/socket-token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ roomId: this.roomId }),
+      });
       if (response.status === 401) return this.terminal("signed-out");
       if (response.status === 403) return this.terminal("closed");
       if (!response.ok) throw new Error(`token ${response.status}`);
