@@ -11,7 +11,7 @@
  */
 
 import { numberVar } from "./env";
-import * as policy from "./policy-store";
+import * as policyStore from "./policy-store";
 import { broadcast, closeQuietly, fail, sendTo } from "./room-broadcast";
 import { CLOSE, clampLimit } from "./protocol";
 import * as db from "./room-sql";
@@ -161,11 +161,7 @@ export function handleSend(
     return;
   }
 
-  // Re-run regardless of what the client did (VRIP-09). The dialog is a nudge
-  // in someone's browser; this is the control. A refused frame is never
-  // stored, so the message the room blocked does not exist to be reported —
-  // which is why the flag row carries its own snippet.
-  const screened = policy.screen(sql, pseudonym, body, confirmed, now);
+  const screened = policyStore.screen(sql, pseudonym, body, confirmed, now);
   if (screened.blocked) {
     fail(ws, "blocked", screened.reason ?? "That message was not sent.");
     // The suspension row is already written. It takes effect on the next

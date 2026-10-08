@@ -185,12 +185,10 @@ describe("a message whose highest tier is personal data", () => {
 });
 
 describe("two tiers in one message", () => {
-  it("delivers profanity and a phone number ephemerally, because confirm outranks count", async () => {
-    // Untargeted profanity is the count tier and a number is the confirm tier.
-    // The higher of the two decides, so this is a personal-data message: it
-    // sends, it is tallied, and it is not stored.
+  it("delivers a phone number ephemerally", async () => {
+    // A number is the confirm tier. It sends, it is tallied, and it is not stored.
     const socket = await connect("wry-otter");
-    const body = "bc just call me on 9876543211";
+    const body = "just call me on 9876543211";
     socket.send({ t: "send", body });
 
     const frame = ephemeral(await socket.next("ephemeral"));

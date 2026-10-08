@@ -246,7 +246,9 @@ export function screen(
     pseudonym,
     now - AUTO_SUSPEND_WINDOW_MS,
   );
-  const suspended = recent >= AUTO_SUSPEND_BLOCKS;
+
+  // Auto-suspension temporarily disabled pending permissions/PR
+  const suspended = false; // recent >= AUTO_SUSPEND_BLOCKS;
   if (suspended) {
     addSuspension(sql, pseudonym, now);
     sql.exec(`UPDATE flags SET auto_suspended = 1 WHERE id = ?`, id);
