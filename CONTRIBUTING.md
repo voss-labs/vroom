@@ -8,6 +8,10 @@ New to open source? Start with
 [voss-labs/first-contributions](https://github.com/voss-labs/first-contributions),
 then come back.
 
+Open issues are titled by area ([Frontend], [API], [Database], [Testing]) with
+a matching label. Start with `good first issue`, and send one pull request per
+Part.
+
 ## Getting it running
 
 Node 20+, a Cloudflare account (free plan is enough), a Neon project, and a V
