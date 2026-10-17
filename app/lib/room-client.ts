@@ -159,6 +159,8 @@ export class RoomConnection {
       return this.retry();
     }
 
+    if (this.stopped) return;
+
     // Second subprotocol value carries the token, so it never lands in a URL.
     const socket = new WebSocket(wsUrl, [PROTOCOL_ID, token]);
     this.socket = socket;

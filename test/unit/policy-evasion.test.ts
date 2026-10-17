@@ -14,37 +14,37 @@ const tier = (text: string) => detect(text).tier;
 describe("evasions that used to get through", () => {
   it("rejoins spaced letters and folds the digraph they spell", () => {
     expect(normalise("c h u t i y a")).toBe(normalise("chutiya"));
-    expect(tier("c h u t i y a hai tu")).toBe("count");
-    expect(tier("b h e n c h o d")).toBe("count");
+    expect(tier("c h u t i y a hai tu")).toBe("block");
+    expect(tier("b h e n c h o d")).toBe("block");
   });
 
   it("reads digits and symbols as the letters they stand in for", () => {
-    expect(tier("chut1ya")).toBe("count");
-    expect(tier("b1tch")).toBe("count");
-    expect(tier("a$$hole")).toBe("count");
+    expect(tier("chut1ya")).toBe("block");
+    expect(tier("b1tch")).toBe("block");
+    expect(tier("a$$hole")).toBe("block");
   });
 
   it("reads a masked letter through the word's skeleton", () => {
-    expect(tier("f*ck this")).toBe("count");
-    expect(tier("f**k this")).toBe("count");
-    expect(tier("ch*tiya")).toBe("count");
-    expect(tier("b*tch")).toBe("count");
+    expect(tier("f*ck this")).toBe("block");
+    expect(tier("f**k this")).toBe("block");
+    expect(tier("ch*tiya")).toBe("block");
+    expect(tier("b*tch")).toBe("block");
   });
 
   it("does not let an invisible character split a word", () => {
-    expect(tier("chu\u200btiya")).toBe("count");
-    expect(tier("f\u200cu\u200dck")).toBe("count");
+    expect(tier("chu\u200btiya")).toBe("block");
+    expect(tier("f\u200cu\u200dck")).toBe("block");
   });
 
   it("reads Cyrillic and Greek look-alikes as Latin", () => {
-    expect(tier("\u0441hutiya")).toBe("count");
-    expect(tier("CHUTIY\u0410")).toBe("count");
-    expect(tier("f\u03c5ck")).toBe("count");
+    expect(tier("\u0441hutiya")).toBe("block");
+    expect(tier("CHUTIY\u0410")).toBe("block");
+    expect(tier("f\u03c5ck")).toBe("block");
   });
 
   it("folds full-width and mathematical letters", () => {
-    expect(tier("\uff46\uff55\uff43\uff4b")).toBe("count");
-    expect(tier("\u{1d41f}\u{1d42e}\u{1d41c}\u{1d424}")).toBe("count");
+    expect(tier("\uff46\uff55\uff43\uff4b")).toBe("block");
+    expect(tier("\u{1d41f}\u{1d42e}\u{1d41c}\u{1d424}")).toBe("block");
   });
 
   it("still escalates an evaded word beside a target", () => {

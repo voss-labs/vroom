@@ -55,17 +55,17 @@ describe("normalisation", () => {
   });
 });
 
-describe("the count tier", () => {
-  it("counts profanity with nobody named, and blocks nothing", () => {
-    expect(tier("bc this deadline is insane")).toBe("count");
-    expect(tier("abey bc kal ka paper kaisa gaya")).toBe("count");
-    expect(tier("mkc this assignment is endless")).toBe("count");
+describe("the profanity tier", () => {
+  it("blocks profanity with nobody named", () => {
+    expect(tier("bc this deadline is insane")).toBe("block");
+    expect(tier("abey bc kal ka paper kaisa gaya")).toBe("block");
+    expect(tier("mkc this assignment is endless")).toBe("block");
   });
 
-  it("counts the evasions too, because it normalises first", () => {
-    expect(tier("m.k.c what a day")).toBe("count");
-    expect(tier("MKCC yaar this is too much")).toBe("count");
-    expect(tier("मादरचोद kya kar raha hai")).toBe("count");
+  it("blocks the evasions too, because it normalises first", () => {
+    expect(tier("m.k.c what a day")).toBe("block");
+    expect(tier("MKCC yaar this is too much")).toBe("block");
+    expect(tier("मादरचोद kya kar raha hai")).toBe("block");
   });
 });
 
@@ -96,11 +96,11 @@ describe("the block tier", () => {
     expect(tier("he is such a chamar")).toBe("block");
   });
 
-  it("measures proximity in words, so a distant target does not escalate", () => {
+  it("measures proximity in words, so a distant target does not escalate (N/A now since all profanity is blocked)", () => {
     const near = `bc ${"word ".repeat(PROXIMITY_WINDOW_WORDS - 2)}quiet-ibex`;
     const far = `bc ${"word ".repeat(PROXIMITY_WINDOW_WORDS + 2)}quiet-ibex`;
     expect(tier(near)).toBe("block");
-    expect(tier(far)).toBe("count");
+    expect(tier(far)).toBe("block"); // Now both are block
   });
 
   it("names the target in the matches, so the flag says why it blocked", () => {
@@ -153,12 +153,12 @@ describe("which tier wins, and what is therefore ephemeral (VRIP-10)", () => {
     }
   });
 
-  it("lets confirm outrank count, so profanity plus a number is ephemeral", () => {
-    // Untargeted profanity is count and a number is confirm. The higher of the
-    // two decides, and it is the number that decides what happens to the row.
+  it("lets block outrank confirm, so profanity plus a number is blocked", () => {
+    // Untargeted profanity is now block and a number is confirm. The higher of the
+    // two decides.
     const found = detect("bc just call me on 9876543210");
-    expect(found.tier).toBe("confirm");
-    expect(isEphemeral(found)).toBe(true);
+    expect(found.tier).toBe("block");
+    expect(isEphemeral(found)).toBe(false); // Because it is blocked, not ephemeral
   });
 
   it("lets block outrank confirm, so a targeted message is refused outright", () => {
@@ -229,7 +229,7 @@ describe("false-positive guards", () => {
   it("does not read `is it a good idea` as class IT-A", () => {
     // voss-ask's class regex is case-insensitive and does exactly this. Here a
     // division is a target that escalates profanity, so it must be upper case.
-    expect(tier("is it a good idea bc i think not")).toBe("count");
+    expect(tier("is it a good idea bc i think not")).toBe("block");
     expect(tier("bc CS-A has a test tomorrow")).toBe("block");
   });
 
@@ -257,8 +257,8 @@ describe("snippets", () => {
 
 describe("evasion and staff roles (found in production, 2026-08-13)", () => {
   it("catches a term with its vowels dropped", () => {
-    expect(detect("fck").tier).toBe("count");
-    expect(detect("bhnchd").tier).toBe("count");
+    expect(detect("fck").tier).toBe("block");
+    expect(detect("bhnchd").tier).toBe("block");
   });
 
   it("treats an unnamed staff role as a target", () => {

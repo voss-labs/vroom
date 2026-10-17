@@ -55,8 +55,8 @@ export const PROXIMITY_WINDOW_WORDS = 6;
 
 /** What a category scores on its own, before any target is considered. */
 const SEVERITY: Record<Category, Tier> = {
-  profanity: "count",
-  sexual: "count",
+  profanity: "block",
+  sexual: "block",
   slur: "block",
   accusation: "none",
   threat: "block",
