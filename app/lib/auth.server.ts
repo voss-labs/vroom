@@ -74,8 +74,6 @@ function build() {
     },
 
     plugins: [
-      // TODO: Re-enable auth
-      /*
       genericOAuth({
         config: [
           {
@@ -103,7 +101,6 @@ function build() {
           },
         ],
       }),
-      */
     ],
   });
 }
@@ -117,11 +114,7 @@ export interface SessionUser {
 export async function getSessionUser(
   request: Request,
 ): Promise<SessionUser | null> {
-  // TODO: Re-enable auth
-  return { id: "dev-user", name: "Local Dev" };
-  /*
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) return null;
   return { id: session.user.id, name: session.user.name };
-  */
 }

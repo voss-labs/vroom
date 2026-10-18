@@ -34,8 +34,12 @@ vi.mock("~/db", async () => {
   return { db, getDb: () => db, schema };
 });
 
-const { ensureMember, findAnyMemberByUserId } =
-  await import("~/db/queries/members");
+const {
+  ensureMember,
+  findAnyMemberByUserId,
+  findMemberById,
+  findMemberByUserId,
+} = await import("~/db/queries/members");
 const { assertModerator } = await import("~/lib/require-role.server");
 const { isSuspended } = await import("~/lib/membership.server");
 
@@ -66,6 +70,16 @@ beforeEach(() => {
   filteredSelect = [];
   unfilteredSelect = [];
   insertResult = [];
+});
+
+describe("no invented moderator", () => {
+  it("does not treat a missing user id as Local Dev", async () => {
+    filteredSelect = [];
+    unfilteredSelect = [];
+    expect(await findMemberByUserId("dev-user")).toBeNull();
+    expect(await findAnyMemberByUserId("dev-user")).toBeNull();
+    expect(await findMemberById("dev-member-id")).toBeNull();
+  });
 });
 
 describe("ensureMember", () => {

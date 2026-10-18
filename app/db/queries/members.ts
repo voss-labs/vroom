@@ -1,7 +1,7 @@
 import { and, eq, isNull, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "~/db";
-import { members, user } from "~/db/schema";
+import { members } from "~/db/schema";
 
 /**
  * Explicit column lists everywhere. A bare `select()` on `members` is fine
@@ -33,19 +33,6 @@ export type MemberRecord = {
 export async function findMemberByUserId(
   userId: string,
 ): Promise<MemberRecord | null> {
-  if (userId === "dev-user") {
-    return {
-      id: "dev-member-id",
-      userId: "dev-user",
-      pseudonym: "Local Dev",
-      isModerator: true, // Needs to be true for mod console
-      suspendedAt: null,
-      suspendedReason: null,
-      deletedAt: null,
-      createdAt: new Date(),
-    };
-  }
-
   const rows = await db
     .select(MEMBER_COLUMNS)
     .from(members)
@@ -55,19 +42,6 @@ export async function findMemberByUserId(
 }
 
 export async function findMemberById(id: string): Promise<MemberRecord | null> {
-  if (id === "dev-member-id") {
-    return {
-      id: "dev-member-id",
-      userId: "dev-user",
-      pseudonym: "Local Dev",
-      isModerator: true, // Needs to be true for mod console
-      suspendedAt: null,
-      suspendedReason: null,
-      deletedAt: null,
-      createdAt: new Date(),
-    };
-  }
-
   const rows = await db
     .select(MEMBER_COLUMNS)
     .from(members)
@@ -91,19 +65,6 @@ export async function findMemberByPseudonym(
 export async function findAnyMemberByUserId(
   userId: string,
 ): Promise<MemberRecord | null> {
-  if (userId === "dev-user") {
-    return {
-      id: "dev-member-id",
-      userId: "dev-user",
-      pseudonym: "Local Dev",
-      isModerator: true, // Needs to be true for mod console
-      suspendedAt: null,
-      suspendedReason: null,
-      deletedAt: null,
-      createdAt: new Date(),
-    };
-  }
-
   const rows = await db
     .select(MEMBER_COLUMNS)
     .from(members)
@@ -116,21 +77,6 @@ export async function findAnyMemberByUserId(
 export async function ensureMember(userId: string): Promise<MemberRecord> {
   const existing = await findMemberByUserId(userId);
   if (existing) return existing;
-
-  // TODO: Re-enable auth
-  if (userId === "dev-user") {
-    await db
-      .insert(user)
-      .values({
-        id: "dev-user",
-        name: "Local Dev",
-        email: "dev@vit.edu.in",
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .onConflictDoNothing();
-  }
 
   const rows = await db
     .insert(members)

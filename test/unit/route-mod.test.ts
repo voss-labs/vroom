@@ -147,6 +147,24 @@ beforeEach(() => {
   writeAudit.mockResolvedValue({ id: "a1" });
 });
 
+describe("a signed-out visitor", () => {
+  beforeEach(() => {
+    getSessionUser.mockResolvedValue(null);
+  });
+
+  it("is sent home and the queue is never read", async () => {
+    await expect(loader(get())).rejects.toMatchObject({ status: 302 });
+    expect(listReports).not.toHaveBeenCalled();
+  });
+
+  it("cannot post a moderation action", async () => {
+    await expect(
+      action(post({ intent: "set_room_state", killed: "true" })),
+    ).rejects.toMatchObject({ status: 302 });
+    expect(setKilled).not.toHaveBeenCalled();
+  });
+});
+
 describe("a suspended moderator", () => {
   beforeEach(() => {
     ensureMember.mockResolvedValue(member({ suspendedAt: new Date() }));
