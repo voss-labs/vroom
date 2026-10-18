@@ -9,6 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { openBugReport, ReportBug } from "./components/ReportBug";
 
 export const links: Route.LinksFunction = () => [];
 
@@ -26,6 +27,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
+        <ReportBug />
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -60,12 +62,21 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       </div>
       <h1 className="text-2xl font-semibold tracking-tight">{heading}</h1>
       <p className="text-ink-2 mt-2 text-sm leading-relaxed">{detail}</p>
-      <a
-        className="text-ink mt-6 inline-block text-sm underline underline-offset-4"
-        href="/"
-      >
-        Back to the start
-      </a>
+      <div className="mt-6 flex items-center gap-4">
+        <a
+          className="text-ink inline-block text-sm underline underline-offset-4"
+          href="/"
+        >
+          Back to the start
+        </a>
+        <button
+          type="button"
+          onClick={() => openBugReport(`${heading}: ${detail}`)}
+          className="border-line-2 text-ink-2 hover:bg-bg-2 hover:text-ink rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
+        >
+          Report this error
+        </button>
+      </div>
       {stack && (
         <pre className="border-line-2 text-ink-3 mt-8 max-h-72 overflow-auto rounded-md border p-4 text-xs">
           <code>{stack}</code>
