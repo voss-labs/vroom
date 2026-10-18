@@ -62,43 +62,44 @@
 }
 
 :root[data-theme="light"] {
-  --color-ground: #f5f3ef;
-  --color-panel: #ffffff;
-  --color-panel-2: #eeebe5;
-  --color-raised: #e4e0d8;
-  --color-raised-2: #d8d3c8;
-  --color-line: #e2ded6;
-  --color-line-2: #c8c2b8;
-  --color-line-3: #968f84;
+  /* Warm archival parchment / stone paper — no stark #ffffff glare */
+  --color-ground: #ede9e0;
+  --color-panel: #f5f2eb;
+  --color-panel-2: #e6e1d6;
+  --color-raised: #dcd6c8;
+  --color-raised-2: #d0c9b8;
+  --color-line: #d8d2c5;
+  --color-line-2: #b8b0a0;
+  --color-line-3: #877f70;
 
-  --color-ink: #141311;
-  --color-ink-2: #45413c;
-  --color-ink-3: #6b655e;
+  --color-ink: #171614;
+  --color-ink-2: #3d3934;
+  --color-ink-3: #635d55;
 
-  --color-brand: #d44d13;
-  --color-brand-deep: #9e3408;
+  --color-brand: #c8430c;
+  --color-brand-deep: #962f04;
 
-  --color-neg: #b42929;
-  --color-ok: #177847;
+  --color-neg: #a82424;
+  --color-ok: #146c3e;
 
-  --brand-dim: rgba(212, 77, 19, 0.12);
-  --neg-dim: rgba(180, 41, 41, 0.1);
-  --ok-dim: rgba(23, 120, 71, 0.1);
-  --row-zebra: rgba(20, 19, 17, 0.03);
-  --btn-primary-fg: #ffffff;
-  --btn-primary-hover: #bd420d;
-  --scroll-thumb: #c5bfb4;
-  --scroll-thumb-hover: #9e978b;
+  --brand-dim: rgba(200, 67, 12, 0.12);
+  --neg-dim: rgba(168, 36, 36, 0.11);
+  --ok-dim: rgba(20, 108, 62, 0.11);
+  --row-zebra: rgba(23, 22, 20, 0.036);
+  --btn-primary-fg: #fcfaf5;
+  --btn-primary-hover: #b03807;
+  --scroll-thumb: #bfb7a8;
+  --scroll-thumb-hover: #968e7e;
 
-  /* Handle palette — darkened for high WCAG contrast on stone/white */
-  --handle-0: #167547;
-  --handle-1: #116b68;
-  --handle-2: #185a8f;
-  --handle-3: #39499c;
-  --handle-4: #643c96;
-  --handle-5: #8c3281;
-  --handle-6: #8f5c08;
-  --handle-7: #446e14;
+  /* Handle palette — high-contrast terminal inks tuned for warm paper */
+  --handle-0: #126b3f;
+  --handle-1: #0e6360;
+  --handle-2: #155285;
+  --handle-3: #334291;
+  --handle-4: #5c358c;
+  --handle-5: #822b77;
+  --handle-6: #825205;
+  --handle-7: #3d6310;
 
   color-scheme: light;
 }
