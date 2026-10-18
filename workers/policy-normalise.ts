@@ -107,6 +107,27 @@ export function elide(word: string): string {
   return word.slice(0, 1) + word.slice(1).replace(/[aeiou]/g, "");
 }
 
+const MAX_INSERTED_VOWELS = 2;
+
+/**
+ * True when `typed` is `term` with at most two `a`s written in (`bhosda` as
+ * `bhosada`). Only `a` counts: that is the schwa Hindi and Marathi romanisation
+ * adds. Inserting any other vowel would also block ordinary words (`counts`
+ * for `cunts`).
+ */
+export function isVowelVariant(typed: string, term: string): boolean {
+  if (!typed || !term || typed.length <= term.length) return false;
+  if (typed.length - term.length > MAX_INSERTED_VOWELS) return false;
+  let i = 0;
+  let inserted = 0;
+  for (const ch of typed) {
+    if (i < term.length && ch === term[i]) i++;
+    else if (ch === "a") inserted++;
+    else return false;
+  }
+  return i === term.length && inserted === typed.length - term.length;
+}
+
 function isCore(ch: string | undefined): boolean {
   return ch !== undefined && (WORD_CHAR.test(ch) || INVISIBLE.test(ch));
 }

@@ -21,6 +21,7 @@ import {
 } from "./policy-patterns";
 import {
   elide,
+  isVowelVariant,
   normalise,
   normaliseWord,
   phoneticWord,
@@ -34,6 +35,7 @@ import {
   TRAILING_HONORIFICS,
   type Category,
 } from "./policy-words";
+import { variantTerms } from "./policy-variant";
 
 /** Re-exported so the detector stays the one import surface for policy. */
 export { redactPersonal } from "./policy-patterns";
@@ -196,14 +198,17 @@ interface Hit extends Span {
   category?: Category;
 }
 
-/**
- * A token is looked up by its normalised form, its phonetic canonical form
- * (Hinglish/Marathi equivalences), and, when masked, its vowel-elided skeleton.
- */
+/** Norm, phonetic form, masked skeleton, and a vowel-inserted spelling (`bhosada`). */
 function candidates(token: Token): Term[] {
-  const out: Term[] = [...(TERM_INDEX.get(token.norm) ?? [])];
+  const out: Term[] = [
+    ...(TERM_INDEX.get(token.norm) ?? []),
+    ...variantTerms(token.norm),
+  ];
   if (token.phonetic && token.phonetic !== token.norm) {
-    out.push(...(TERM_INDEX.get(token.phonetic) ?? []));
+    out.push(
+      ...(TERM_INDEX.get(token.phonetic) ?? []),
+      ...variantTerms(token.phonetic),
+    );
   }
   if (
     token.skeleton &&
@@ -217,7 +222,11 @@ function candidates(token: Token): Term[] {
 
 function matchesPart(token: Token, part: string): boolean {
   return (
-    token.norm === part || token.phonetic === part || token.skeleton === part
+    token.norm === part ||
+    token.phonetic === part ||
+    token.skeleton === part ||
+    isVowelVariant(token.norm, part) ||
+    (token.phonetic !== undefined && isVowelVariant(token.phonetic, part))
   );
 }
 

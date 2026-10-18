@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ADJECTIVES, ANIMALS } from "../../workers/handles";
 import { detect, isEphemeral, normalise } from "../../workers/policy";
 
 /**
@@ -198,5 +199,26 @@ describe("Hindi, Marathi, and English filter robustness", () => {
     expect(tier("main road pe chakka jam hai")).toBe("none");
     expect(tier("bus ka chakka puncture ho gaya")).toBe("none");
     expect(tier("#placements update for 2026 batch")).toBe("none");
+  });
+
+  it("blocks a vowel inserted into a listed word", () => {
+    // Seen in production: the schwa is written out, so the word is not `bhosda`.
+    expect(tier("tumhari ma ka bhosada")).toBe("block");
+    expect(tier("bhosade")).toBe("block");
+    expect(tier("bhosad")).toBe("block");
+    expect(tier("maderchod")).toBe("block");
+    expect(tier("chootiya")).toBe("block");
+    expect(tier("bhonsda")).toBe("block");
+    expect(tier("lode")).toBe("block");
+  });
+
+  it("does not treat a different vowel as the same word", () => {
+    expect(tier("the 2026 batch has a classic assignment")).toBe("none");
+    expect(tier("stitch the notes before the lab")).toBe("none");
+    expect(tier("because the database deadline moved")).toBe("none");
+    expect(tier("the head count still counts")).toBe("none");
+    for (const word of [...ADJECTIVES, ...ANIMALS]) {
+      expect(tier(word)).toBe("none");
+    }
   });
 });
