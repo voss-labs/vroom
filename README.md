@@ -1,6 +1,6 @@
 # V Rooms
 
-A pseudonymous, real-time conversation for verified VIT students. Built by VOSS Labs.
+A Anonymous, real-time conversation for verified VIT students. Built by VOSS Labs.
 
 WhatsApp connects people who already know each other. V Rooms lets you talk to the
 college you have not met yet. You log in with V Auth, you get a handle, and you are
