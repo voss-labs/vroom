@@ -10,6 +10,11 @@ const ROOM_LIST = {
     subtitle: "the whole college, live",
     placeholder: "Say something to the college",
     empty: "The whole college, and an empty screen.",
+    starters: [
+      "What is happening on campus right now?",
+      "Best late-night food spot open today?",
+      "Anyone heading to the library right now?",
+    ],
   },
   placements: {
     id: "placements",
@@ -18,6 +23,11 @@ const ROOM_LIST = {
     placeholder: "Say something in #placements",
     empty:
       "What a company asked, which round it was, what the offer looked like.",
+    starters: [
+      "Which OA or interview round finished today?",
+      "What topics did the latest shortlist test focus on?",
+      "How long did results take after the technical interview?",
+    ],
   },
   electives: {
     id: "electives",
@@ -26,6 +36,11 @@ const ROOM_LIST = {
     placeholder: "Say something in #electives",
     empty:
       "Which elective is worth it, which one is a trap, who teaches it well.",
+    starters: [
+      "Which open elective has the most practical syllabus?",
+      "How heavy is the grading in this semester's humanities electives?",
+      "FFCS slot advice: morning vs afternoon lab trade-offs?",
+    ],
   },
   hostel: {
     id: "hostel",
@@ -34,6 +49,11 @@ const ROOM_LIST = {
     placeholder: "Say something in #hostel",
     empty:
       "Hostel facilities, hostel rules, and finding someone to share with.",
+    starters: [
+      "How is Wi-Fi holding up in your block tonight?",
+      "Which mess caterer is worth switching to next month?",
+      "Looking for a quiet roommate for next counselling?",
+    ],
   },
   projects: {
     id: "projects",
@@ -41,6 +61,11 @@ const ROOM_LIST = {
     subtitle: "find people to build with",
     placeholder: "Say something in #projects",
     empty: "Find teammates, ask about lab work, or show what you built.",
+    starters: [
+      "Looking for 1-2 people to build a weekend side project.",
+      "Anyone working with Cloudflare Workers or Rust on campus?",
+      "Need a teammate for the upcoming hackathon — what are you building?",
+    ],
   },
 } as const;
 
@@ -52,6 +77,7 @@ export interface RoomMeta {
   subtitle: string;
   placeholder: string;
   empty: string;
+  starters: readonly string[];
 }
 
 export const ROOMS: Record<RoomId, RoomMeta> = ROOM_LIST;

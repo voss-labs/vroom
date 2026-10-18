@@ -13,7 +13,7 @@ import {
   TBL_FOOT,
   type MenuItem,
 } from "./RowMenu";
-import { handleColour } from "~/lib/utils";
+import { auditTime, cn, handleColour } from "~/lib/utils";
 import type { ModActionData } from "~/routes/mod";
 
 /**
@@ -37,11 +37,13 @@ export interface ReportRow {
   reason: string | null;
   handle: string | null;
   reportedMemberId: string;
+  roomId?: string;
   status: string;
   createdAt: string | Date;
 }
 
-type Column = "author";
+type Column = "room" | "author";
+type StatusFilter = "all" | "open" | "closed";
 
 export interface ReportTableProps {
   reports: ReportRow[];
@@ -58,23 +60,29 @@ export function ReportTable({
 }: ReportTableProps) {
   const fetcher = useFetcher<ModActionData>();
   const [filter, setFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sortDir, setSortDir] = useState<0 | 1 | -1>(0);
   const [hidden, setHidden] = useState<Set<Column>>(new Set());
 
   const rows = useMemo(() => {
     const query = filter.trim().toLowerCase();
-    const matched = reports.filter(
-      (report) =>
-        !query ||
+    const matched = reports.filter((report) => {
+      if (statusFilter === "open" && report.status !== "open") return false;
+      if (statusFilter === "closed" && report.status === "open") return false;
+      if (!query) return true;
+      return (
         report.snapshot.toLowerCase().includes(query) ||
-        (report.handle ?? "").toLowerCase().includes(query),
-    );
+        (report.handle ?? "").toLowerCase().includes(query) ||
+        (report.roomId ?? "").toLowerCase().includes(query) ||
+        (report.reason ?? "").toLowerCase().includes(query)
+      );
+    });
     if (sortDir === 0) return matched;
     return [...matched].sort(
       (a, b) => (a.handle ?? "").localeCompare(b.handle ?? "") * sortDir,
     );
-  }, [reports, filter, sortDir]);
+  }, [reports, filter, statusFilter, sortDir]);
 
   const busyId =
     fetcher.state !== "idle"
@@ -112,15 +120,18 @@ export function ReportTable({
 
   function menuFor(report: ReportRow): MenuItem[] {
     const done = report.status !== "open";
+    const isAutoFlag = report.messageId.startsWith("flag:");
     return [
       {
         kind: "label",
-        text: `Report on message ${report.messageId.slice(0, 8)}`,
+        text: isAutoFlag
+          ? `Policy flag ${report.messageId}`
+          : `Report on message ${report.messageId.slice(0, 8)}`,
       },
       {
         text: "Delete message",
         danger: true,
-        disabled: done,
+        disabled: done || isAutoFlag,
         onSelect: () => act("delete_message", report.id),
       },
       {
@@ -145,7 +156,7 @@ export function ReportTable({
         <h2>Reports</h2>
         <p>
           Handles are anonymous to VOSS too. Delete the message, suspend the
-          handle, or dismiss the report.
+          handle across all rooms, or dismiss the report.
         </p>
       </div>
 
@@ -154,15 +165,40 @@ export function ReportTable({
           className="inp"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          placeholder="Filter reports..."
+          placeholder="Filter messages, handles, rooms..."
           aria-label="Filter reports"
         />
+        <div
+          className="flex items-center gap-1"
+          role="group"
+          aria-label="Filter by status"
+        >
+          {(["all", "open", "closed"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setStatusFilter(mode)}
+              className={cn(
+                "btn btn-sm capitalize",
+                statusFilter === mode && "border-brand text-ink bg-raised",
+              )}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
         <div className="ml-auto flex gap-2">
           <RowMenu
             label="Toggle columns"
             className="btn h-11"
             items={[
               { kind: "label", text: "Toggle columns" },
+              {
+                text: "Room",
+                tick: !hidden.has("room"),
+                keepOpen: true,
+                onSelect: () => toggleColumn("room"),
+              },
               {
                 text: "Author",
                 tick: !hidden.has("author"),
@@ -205,6 +241,7 @@ export function ReportTable({
                   </label>
                 </th>
                 <th>Reported message</th>
+                {!hidden.has("room") && <th>Room</th>}
                 {!hidden.has("author") && (
                   <th
                     aria-sort={
@@ -241,6 +278,7 @@ export function ReportTable({
               {rows.map((report) => {
                 const done = report.status !== "open";
                 const busy = busyId === report.id;
+                const isAutoFlag = report.messageId.startsWith("flag:");
                 return (
                   <tr
                     key={report.id}
@@ -260,11 +298,26 @@ export function ReportTable({
                     </td>
                     <td>
                       <div className="cell-msg">{report.snapshot}</div>
-                      <div className="cell-sub">
-                        {`Message ${report.messageId.slice(0, 8)} · ${report.reason ?? "reported by a student"}`}
-                        {busy ? " · working" : ""}
+                      <div className="cell-sub flex flex-wrap items-center gap-1.5">
+                        <span>
+                          {isAutoFlag
+                            ? `Auto-flag · ${report.reason ?? "policy match"}`
+                            : `Message ${report.messageId.slice(0, 8)} · ${report.reason ?? "reported by a student"}`}
+                        </span>
+                        <span>· {auditTime(report.createdAt)}</span>
+                        {done && (
+                          <span className="badge py-0 text-[11px]">
+                            {report.status}
+                          </span>
+                        )}
+                        {busy && <span>· working</span>}
                       </div>
                     </td>
+                    {!hidden.has("room") && (
+                      <td className="text-ink-2 font-mono text-xs whitespace-nowrap">
+                        #{report.roomId ?? "campus-live"}
+                      </td>
+                    )}
                     {!hidden.has("author") && (
                       <td
                         className="cell-handle"
@@ -305,7 +358,9 @@ export function ReportTable({
       <div className={TBL_FOOT}>
         <span>
           {`${selected.size} of ${rows.length} row(s) selected. Page ${page + 1} of ${pageCount}, ${total} report(s) in total.`}
-          {filter.trim() ? " Filtering this page only." : ""}
+          {filter.trim() || statusFilter !== "all"
+            ? " Filtering this page only."
+            : ""}
         </span>
         <div className="ml-auto flex gap-2">
           {page > 0 ? (

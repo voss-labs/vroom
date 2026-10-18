@@ -40,20 +40,17 @@ export function handleHistory(
     return;
   }
 
+  const now = Date.now();
   const perMinute = numberVar(env.RATE_LIMIT_HISTORY_PER_MINUTE, 30);
-  const verdict = db.checkRate(
-    sql,
-    `history:${pseudonym}`,
-    perMinute,
-    Date.now(),
-  );
+  const verdict = db.checkRate(sql, `history:${pseudonym}`, perMinute, now);
   if (!verdict.allowed) {
     const slow = "You are requesting history too quickly.";
     fail(ws, "rate_limited", slow, verdict.retryAfter);
     return;
   }
 
-  const page = db.messagesBefore(sql, before, clampLimit(limit));
+  db.pruneExpiredMessages(sql, now);
+  const page = db.messagesBefore(sql, before, clampLimit(limit), now);
   sendTo(ws, {
     t: "history",
     messages: page.messages,
@@ -105,7 +102,7 @@ export function handleWithdraw(
     return;
   }
 
-  const message = db.findMessage(sql, id);
+  const message = db.findMessage(sql, id, now);
   // Nothing to withdraw: an unknown id, or an ephemeral message that was never
   // written down (VRIP-10). Neither is an error worth a refusal frame, and
   // neither tells the sender anything about a message that is not theirs.
@@ -182,11 +179,16 @@ export function handleSend(
     return;
   }
 
+  db.pruneExpiredMessages(sql, now);
   const msg = db.insertMessage(sql, {
     id: crypto.randomUUID(),
     pseudonym,
     body,
     createdAt: now,
   });
+  const nextExpiry = db.nextExpiryAt(sql);
+  if (nextExpiry !== null) {
+    void ctx.storage.setAlarm(nextExpiry);
+  }
   broadcast(ctx, { t: "message", m: msg });
 }

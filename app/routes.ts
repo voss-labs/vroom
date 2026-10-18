@@ -13,6 +13,7 @@ export default [
   route("api/device/session", "routes/api.device.session.ts"),
   route("api/socket-token", "routes/api.socket-token.ts"),
   route("api/report", "routes/api.report.ts"),
+  route("api/bug-report", "routes/api.bug-report.ts"),
   // The script front door (VRIP-08).
   route("api/mod/:action", "routes/api.mod.$action.ts"),
 ] satisfies RouteConfig;

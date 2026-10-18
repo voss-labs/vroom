@@ -13,15 +13,17 @@ import {
   TBL_FOOT,
   type MenuItem,
 } from "./RowMenu";
-import { handleColour } from "~/lib/utils";
+import { cn, handleColour } from "~/lib/utils";
 import type { ModActionData } from "~/routes/mod";
 
 /**
- * The accounts table. There is no email column and there never will be: naming
- * someone requires a report, and suspending is enough to remove them (VRIP-05).
+ * The accounts table. There is no email column and there never will be:
+ * students authenticate with a browser device key and have no email or name
+ * in the database (VRIP-13). Suspending a handle closes its sockets across
+ * every room and blocks reconnection.
  *
- * The message count is a Durable Object read, so it is an em dash rather than a
- * zero when the object is unreachable.
+ * The message count is a Durable Object read across the 48-hour window, so it
+ * is an em dash rather than a zero when a room is unreachable.
  */
 
 export interface AccountRow {
@@ -33,6 +35,9 @@ export interface AccountRow {
 
 type Column = "messages" | "status";
 type SortKey = "handle" | "messages";
+type AccountFilter = "all" | "active" | "suspended";
+
+const PAGE_SIZE = 25;
 
 interface AccountTableProps {
   accounts: AccountRow[];
@@ -43,15 +48,23 @@ interface AccountTableProps {
 export function AccountTable({ accounts, counts }: AccountTableProps) {
   const fetcher = useFetcher<ModActionData>();
   const [filter, setFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<AccountFilter>("all");
+  const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
   const [hidden, setHidden] = useState<Set<Column>>(new Set());
 
-  const rows = useMemo(() => {
+  const filteredRows = useMemo(() => {
     const query = filter.trim().toLowerCase();
-    const matched = accounts.filter((account) =>
-      account.handle.toLowerCase().includes(query),
-    );
+    const matched = accounts.filter((account) => {
+      if (statusFilter === "active" && account.suspended) return false;
+      if (statusFilter === "suspended" && !account.suspended) return false;
+      if (!query) return true;
+      return (
+        account.handle.toLowerCase().includes(query) ||
+        (account.suspendedReason ?? "").toLowerCase().includes(query)
+      );
+    });
     if (!sort) return matched;
     return [...matched].sort((a, b) => {
       if (sort.key === "handle")
@@ -60,7 +73,18 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
       const right = counts?.[b.handle] ?? 0;
       return (left - right) * sort.dir;
     });
-  }, [accounts, counts, filter, sort]);
+  }, [accounts, counts, filter, statusFilter, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const rows = useMemo(
+    () =>
+      filteredRows.slice(
+        safePage * PAGE_SIZE,
+        safePage * PAGE_SIZE + PAGE_SIZE,
+      ),
+    [filteredRows, safePage],
+  );
 
   const busyId =
     fetcher.state !== "idle"
@@ -130,8 +154,9 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
       <div className="sec-head">
         <h2>Accounts</h2>
         <p>
-          No email column here by design. Suspending is enough to remove
-          someone; naming them requires a report.
+          Device-key handles only — no personal data is stored. Suspending a
+          handle closes its active connections across all rooms and refuses
+          reconnection.
         </p>
       </div>
 
@@ -139,10 +164,35 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
         <input
           className="inp"
           value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder="Filter handles..."
+          onChange={(event) => {
+            setFilter(event.target.value);
+            setPage(0);
+          }}
+          placeholder="Filter handles or reasons..."
           aria-label="Filter handles"
         />
+        <div
+          className="flex items-center gap-1"
+          role="group"
+          aria-label="Filter accounts by status"
+        >
+          {(["all", "active", "suspended"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => {
+                setStatusFilter(mode);
+                setPage(0);
+              }}
+              className={cn(
+                "btn btn-sm capitalize",
+                statusFilter === mode && "border-brand text-ink bg-raised",
+              )}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
         <div className="ml-auto flex gap-2">
           <RowMenu
             label="Toggle columns"
@@ -150,7 +200,7 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
             items={[
               { kind: "label", text: "Toggle columns" },
               {
-                text: "Messages",
+                text: "Messages (48h)",
                 tick: !hidden.has("messages"),
                 keepOpen: true,
                 onSelect: () => toggleColumn("messages"),
@@ -218,7 +268,7 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
                       className={SORTBTN}
                       onClick={() => onSort("messages")}
                     >
-                      Messages
+                      Messages (48h)
                       <i
                         className="text-ink-3 text-[11px] not-italic"
                         aria-hidden="true"
@@ -251,11 +301,18 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
                         />
                       </label>
                     </td>
-                    <td
-                      className="cell-handle"
-                      style={{ color: handleColour(account.handle) }}
-                    >
-                      {account.handle}
+                    <td>
+                      <div
+                        className="cell-handle"
+                        style={{ color: handleColour(account.handle) }}
+                      >
+                        {account.handle}
+                      </div>
+                      {account.suspended && account.suspendedReason && (
+                        <div className="cell-sub">
+                          Reason: {account.suspendedReason}
+                        </div>
+                      )}
                     </td>
                     {!hidden.has("messages") && (
                       <td className="font-mono tabular-nums">
@@ -309,12 +366,24 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
       </div>
 
       <div className={TBL_FOOT}>
-        <span>{`${selected.size} of ${rows.length} row(s) selected.`}</span>
+        <span>
+          {`${selected.size} of ${rows.length} row(s) selected. Page ${safePage + 1} of ${pageCount}, ${filteredRows.length} handle(s).`}
+        </span>
         <div className="ml-auto flex gap-2">
-          <button type="button" className="btn btn-sm" disabled>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={safePage === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
             Previous
           </button>
-          <button type="button" className="btn btn-sm" disabled>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={safePage + 1 >= pageCount}
+            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+          >
             Next
           </button>
         </div>

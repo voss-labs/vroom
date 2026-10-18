@@ -67,7 +67,8 @@ export function TopBar({
           aria-label={`${online} online. Open the rooms and the member list.`}
           onClick={onOpenMembers}
         >
-          {pill}
+          <span className={cn("mark", killed && "mark-dead")} />
+          <span>Rooms · {online} online</span>
         </button>
       </div>
     </header>

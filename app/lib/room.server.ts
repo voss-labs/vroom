@@ -59,10 +59,46 @@ export interface RoomRead {
   counts: Record<string, number>;
 }
 
+export interface RoomPulse {
+  roomId: RoomId;
+  online: number;
+  messages: number;
+  killed: boolean;
+}
+
 export interface RoomsView {
   stats: RoomStats;
   roomState: RoomState;
   counts: Record<string, number>;
+  perRoom?: RoomPulse[];
+}
+
+/** Lightweight per-room online and 48h message counts for room switchers and landing previews. */
+export async function readRoomPulses(): Promise<Record<
+  RoomId,
+  RoomPulse
+> | null> {
+  const reads = await Promise.all(
+    ROOM_IDS.map(async (roomId) => {
+      const res = await tryRoom(roomId, async (room) => ({
+        stats: await room.stats(),
+        state: await room.getRoomState(),
+      }));
+      if (!res) return null;
+      return {
+        roomId,
+        online: res.stats.online,
+        messages: res.stats.total,
+        killed: res.state.killed,
+      } satisfies RoomPulse;
+    }),
+  );
+  const out = {} as Record<RoomId, RoomPulse>;
+  for (const item of reads) {
+    if (!item) return null;
+    out[item.roomId] = item;
+  }
+  return out;
 }
 
 /** One view across every room, or null if any room could not be read. */
@@ -76,7 +112,17 @@ export async function readRooms(): Promise<RoomsView | null> {
       })),
     ),
   );
-  return mergeRoomReads(reads);
+  const merged = mergeRoomReads(reads);
+  if (!merged) return null;
+  return {
+    ...merged,
+    perRoom: ROOM_IDS.map((roomId, idx) => ({
+      roomId,
+      online: reads[idx]!.stats.online,
+      messages: reads[idx]!.stats.total,
+      killed: reads[idx]!.state.killed,
+    })),
+  };
 }
 
 /**

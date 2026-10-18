@@ -89,10 +89,11 @@ export class RoomDurableObject extends DurableObject<Env> {
   }
 
   private onJoin(server: WebSocket, pseudonym: string, room: string): void {
-    const state = db.readRoomState(this.sql);
-    const page = db.recentMessages(this.sql, PAGE_SIZE);
-    const roster = members(this.ctx);
     const now = Date.now();
+    db.pruneExpiredMessages(this.sql, now);
+    const state = db.readRoomState(this.sql);
+    const page = db.recentMessages(this.sql, PAGE_SIZE, now);
+    const roster = members(this.ctx);
     db.recordPeak(this.sql, db.utcDay(now), roster.length);
 
     sendTo(server, {
@@ -193,6 +194,18 @@ export class RoomDurableObject extends DurableObject<Env> {
     this.broadcastPresence(ws);
   }
 
+  /**
+   * Prunes messages past their 48-hour lifetime even when the room is quiet
+   * (VRIP-15). Reschedules itself for the oldest remaining message if any stay.
+   */
+  async alarm(): Promise<void> {
+    db.pruneExpiredMessages(this.sql, Date.now());
+    const nextExpiry = db.nextExpiryAt(this.sql);
+    if (nextExpiry !== null) {
+      await this.ctx.storage.setAlarm(nextExpiry);
+    }
+  }
+
   /* ---------------- presence ---------------- */
 
   private broadcastPresence(exclude?: WebSocket): void {
@@ -255,14 +268,18 @@ export class RoomDurableObject extends DurableObject<Env> {
   }
 
   async getMessage(id: string): Promise<Msg | null> {
-    return db.findMessage(this.sql, id);
+    const now = Date.now();
+    db.pruneExpiredMessages(this.sql, now);
+    return db.findMessage(this.sql, id, now);
   }
 
   async stats(): Promise<RoomStats> {
-    const { total, since } = db.messageStats(this.sql);
+    const now = Date.now();
+    db.pruneExpiredMessages(this.sql, now);
+    const { total, since } = db.messageStats(this.sql, now);
     const present = members(this.ctx);
     const online = present.length;
-    const day = db.utcDay(Date.now());
+    const day = db.utcDay(now);
     return {
       total,
       since,
@@ -273,7 +290,9 @@ export class RoomDurableObject extends DurableObject<Env> {
   }
 
   async countsByPseudonym(): Promise<Record<string, number>> {
-    return db.countsByPseudonym(this.sql);
+    const now = Date.now();
+    db.pruneExpiredMessages(this.sql, now);
+    return db.countsByPseudonym(this.sql, now);
   }
 
   async suspendedCount(): Promise<number> {

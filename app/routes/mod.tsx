@@ -94,6 +94,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     stats: live ? live.stats : null,
     roomState: live ? live.roomState : null,
     counts: live ? live.counts : null,
+    perRoom: live ? (live.perRoom ?? null) : null,
     page,
     totalReports,
     pageCount: Math.max(1, Math.ceil(totalReports / REPORTS_PAGE_SIZE)),
@@ -165,6 +166,7 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
     stats,
     roomState,
     counts,
+    perRoom,
   } = loaderData;
   const { page, pageCount, totalReports } = loaderData;
 
@@ -185,6 +187,7 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-[9px]">
+          <span className="tag max-[640px]:hidden">48h room retention</span>
           <span className={stats ? "tag tag-live" : "tag"}>
             {stats ? (
               <>
@@ -205,9 +208,9 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
               Moderation
             </h1>
             <p className="text-ink-2 mt-1.5 max-w-[68ch] text-[14px] leading-[1.6]">
-              Students see handles only. You can resolve a handle to a real
-              account, and every time you do it is recorded against the message
-              that justified it.
+              Students hold device keys only — there is no name or email behind
+              a handle. Room messages disappear after 48 hours, while reported
+              snapshots and every moderator action are kept in the audit trail.
             </p>
           </div>
 
@@ -220,7 +223,43 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
             since={stats ? stats.since : null}
           />
 
-          <RoomSwitch killed={roomState ? roomState.killed : null} />
+          <RoomSwitch
+            killed={roomState ? roomState.killed : null}
+            killedAt={roomState ? roomState.killedAt : null}
+            killedBy={roomState ? roomState.killedBy : null}
+          />
+
+          {perRoom && perRoom.length > 0 ? (
+            <section className="card" aria-label="Room activity">
+              <div className="card-head">
+                <h2>Room Pulse</h2>
+                <span className="tag">5 rooms · 48h window</span>
+              </div>
+              <div className="divide-line grid grid-cols-5 divide-x max-[860px]:grid-cols-2 max-[520px]:grid-cols-1">
+                {perRoom.map((r) => (
+                  <Link
+                    key={r.roomId}
+                    to={`/room/${r.roomId}`}
+                    className="hover:bg-bg-2 flex items-center justify-between gap-2 px-4 py-3 text-[13px] transition-colors"
+                  >
+                    <span className="text-ink font-mono font-semibold">
+                      #{r.roomId}
+                    </span>
+                    <span className="text-ink-3 font-mono text-[11.5px]">
+                      <strong
+                        className={
+                          r.online > 0 ? "text-ok font-semibold" : "text-ink-3"
+                        }
+                      >
+                        {r.online}
+                      </strong>{" "}
+                      live · {r.messages} msgs
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <ReportTable
             reports={reports}
