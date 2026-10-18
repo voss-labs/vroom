@@ -17,17 +17,8 @@ import { auditTime, cn, handleColour } from "~/lib/utils";
 import type { ModActionData } from "~/routes/mod";
 
 /**
- * The report queue, in the shadcn data-table idiom the prototype draws: filter,
- * column toggle, checkbox selection, one sortable header, a row overflow menu
- * and a selection footer.
- *
- * Pagination is server-side and real. Filtering and sorting stay client-side and
- * therefore act on the current page only, which the footer says out loud — the
- * queue is a safety surface, and a row it silently drops is a report nobody
- * acts on.
- *
- * There is no identity column. A handle is a device key with no person behind
- * it, so the remedies are the message and the handle (VRIP-13).
+ * The report queue: filter, column toggle, checkbox selection, sortable author,
+ * row overflow menu and selection footer. No identity column exists (VRIP-13).
  */
 
 export interface ReportRow {
@@ -66,17 +57,13 @@ export function ReportTable({
   const [hidden, setHidden] = useState<Set<Column>>(new Set());
 
   const rows = useMemo(() => {
-    const query = filter.trim().toLowerCase();
-    const matched = reports.filter((report) => {
-      if (statusFilter === "open" && report.status !== "open") return false;
-      if (statusFilter === "closed" && report.status === "open") return false;
-      if (!query) return true;
-      return (
-        report.snapshot.toLowerCase().includes(query) ||
-        (report.handle ?? "").toLowerCase().includes(query) ||
-        (report.roomId ?? "").toLowerCase().includes(query) ||
-        (report.reason ?? "").toLowerCase().includes(query)
-      );
+    const q = filter.trim().toLowerCase();
+    const matched = reports.filter((r) => {
+      if (statusFilter === "open" && r.status !== "open") return false;
+      if (statusFilter === "closed" && r.status === "open") return false;
+      if (!q) return true;
+      const hay = `${r.snapshot} ${r.handle ?? ""} ${r.roomId ?? ""} ${r.reason ?? ""}`;
+      return hay.toLowerCase().includes(q);
     });
     if (sortDir === 0) return matched;
     return [...matched].sort(
@@ -88,46 +75,34 @@ export function ReportTable({
     fetcher.state !== "idle"
       ? String(fetcher.formData?.get("reportId") ?? "")
       : "";
-
-  function act(
+  const act = (
     intent: string,
     reportId: string,
     extra?: Record<string, string>,
+  ) => fetcher.submit({ intent, reportId, ...extra }, { method: "post" });
+
+  function toggleSet<T>(
+    setter: React.Dispatch<React.SetStateAction<Set<T>>>,
+    key: NoInfer<T>,
   ) {
-    fetcher.submit({ intent, reportId, ...extra }, { method: "post" });
-  }
-
-  function toggleColumn(column: Column) {
-    setHidden((current) => {
-      const next = new Set(current);
-      if (next.has(column)) next.delete(column);
-      else next.add(column);
+    setter((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
 
-  function toggleRow(id: string) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  const allSelected =
-    rows.length > 0 && rows.every((row) => selected.has(row.id));
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   function menuFor(report: ReportRow): MenuItem[] {
     const done = report.status !== "open";
     const isAutoFlag = report.messageId.startsWith("flag:");
+    const label = isAutoFlag
+      ? `Policy flag ${report.messageId}`
+      : `Report on message ${report.messageId.slice(0, 8)}`;
     return [
-      {
-        kind: "label",
-        text: isAutoFlag
-          ? `Policy flag ${report.messageId}`
-          : `Report on message ${report.messageId.slice(0, 8)}`,
-      },
+      { kind: "label", text: label },
       {
         text: "Delete message",
         danger: true,
@@ -151,7 +126,11 @@ export function ReportTable({
   }
 
   return (
-    <section className="sec">
+    <section className="sec overflow-hidden">
+      <div className="rail-card-head px-4 py-2.5">
+        <span>Moderation Queue · Reports</span>
+        <span>{total} total</span>
+      </div>
       <div className="sec-head">
         <h2>Reports</h2>
         <p>
@@ -197,13 +176,13 @@ export function ReportTable({
                 text: "Room",
                 tick: !hidden.has("room"),
                 keepOpen: true,
-                onSelect: () => toggleColumn("room"),
+                onSelect: () => toggleSet(setHidden, "room"),
               },
               {
                 text: "Author",
                 tick: !hidden.has("author"),
                 keepOpen: true,
-                onSelect: () => toggleColumn("author"),
+                onSelect: () => toggleSet(setHidden, "author"),
               },
             ]}
           >
@@ -241,9 +220,12 @@ export function ReportTable({
                   </label>
                 </th>
                 <th>Reported message</th>
-                {!hidden.has("room") && <th>Room</th>}
+                {!hidden.has("room") && (
+                  <th className="max-[640px]:hidden">Room</th>
+                )}
                 {!hidden.has("author") && (
                   <th
+                    className="max-[640px]:hidden"
                     aria-sort={
                       sortDir === 0
                         ? "none"
@@ -279,6 +261,14 @@ export function ReportTable({
                 const done = report.status !== "open";
                 const busy = busyId === report.id;
                 const isAutoFlag = report.messageId.startsWith("flag:");
+                const authorColor = report.handle
+                  ? handleColour(report.handle)
+                  : undefined;
+                const roomName = report.roomId ?? "campus-live";
+                const authorName = report.handle ?? "no handle";
+                const summary = isAutoFlag
+                  ? `Auto-flag · ${report.reason ?? "policy match"}`
+                  : `Message ${report.messageId.slice(0, 8)} · ${report.reason ?? "reported by a student"}`;
                 return (
                   <tr
                     key={report.id}
@@ -292,18 +282,21 @@ export function ReportTable({
                           className={CBX}
                           checked={selected.has(report.id)}
                           aria-label={`Select report on message ${report.messageId.slice(0, 8)}`}
-                          onChange={() => toggleRow(report.id)}
+                          onChange={() => toggleSet(setSelected, report.id)}
                         />
                       </label>
                     </td>
                     <td>
                       <div className="cell-msg">{report.snapshot}</div>
                       <div className="cell-sub flex flex-wrap items-center gap-1.5">
-                        <span>
-                          {isAutoFlag
-                            ? `Auto-flag · ${report.reason ?? "policy match"}`
-                            : `Message ${report.messageId.slice(0, 8)} · ${report.reason ?? "reported by a student"}`}
+                        <span className="text-ink-2 hidden font-mono text-[11.5px] font-semibold max-[640px]:inline">
+                          #{roomName} ·{" "}
+                          <span style={{ color: authorColor }}>
+                            {authorName}
+                          </span>{" "}
+                          ·
                         </span>
+                        <span>{summary}</span>
                         <span>· {auditTime(report.createdAt)}</span>
                         {done && (
                           <span className="badge py-0 text-[11px]">
@@ -314,31 +307,39 @@ export function ReportTable({
                       </div>
                     </td>
                     {!hidden.has("room") && (
-                      <td className="text-ink-2 font-mono text-xs whitespace-nowrap">
-                        #{report.roomId ?? "campus-live"}
+                      <td className="text-ink-2 font-mono text-xs whitespace-nowrap max-[640px]:hidden">
+                        #{roomName}
                       </td>
                     )}
                     {!hidden.has("author") && (
                       <td
-                        className="cell-handle"
-                        style={{
-                          color: report.handle
-                            ? handleColour(report.handle)
-                            : undefined,
-                        }}
+                        className="cell-handle max-[640px]:hidden"
+                        style={{ color: authorColor }}
                       >
-                        {report.handle ?? "no handle"}
+                        {authorName}
                       </td>
                     )}
-                    <td className={COL_A}>
-                      <RowMenu
-                        label="Actions for this report"
-                        className={DOTS}
-                        disabled={busy}
-                        items={menuFor(report)}
-                      >
-                        <span aria-hidden="true">⋯</span>
-                      </RowMenu>
+                    <td className="w-[1%] whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {!done && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => act("dismiss_report", report.id)}
+                            className="btn btn-sm max-[760px]:hidden"
+                          >
+                            Dismiss
+                          </button>
+                        )}
+                        <RowMenu
+                          label="Actions for this report"
+                          className={DOTS}
+                          disabled={busy}
+                          items={menuFor(report)}
+                        >
+                          <span aria-hidden="true">⋯</span>
+                        </RowMenu>
+                      </div>
                     </td>
                   </tr>
                 );

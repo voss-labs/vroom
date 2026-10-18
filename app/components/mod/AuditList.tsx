@@ -126,7 +126,11 @@ export function AuditList({ entries }: { entries: AuditRow[] }) {
   }, [entries, filter, search]);
 
   return (
-    <section className="sec">
+    <section className="sec overflow-hidden">
+      <div className="rail-card-head px-4 py-2.5">
+        <span>Moderation Ledger · Audit Trail</span>
+        <span>{entries.length} entries</span>
+      </div>
       <div className="sec-head pb-[14px]">
         <h2>Audit</h2>
         <p>

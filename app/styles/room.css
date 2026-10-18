@@ -1,164 +1,48 @@
 /**
- * Campus Live: the rails, the chat log, the composer and the member list.
+ * Campus Live: the room grid, the chat log, and the composer.
  */
 
 @layer components {
-  /* ---------- campus live ---------- */
-
   .room {
     display: grid;
-    grid-template-columns: 236px minmax(0, 1fr) 212px;
+    grid-template-columns: 256px minmax(0, 1fr) 236px;
     flex: 1 1 auto;
     min-height: 0;
   }
-
-  .rail {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    background: var(--color-panel);
-    border-right: 1px solid var(--color-line-2);
-  }
-  .rail-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 12px 8px 14px;
-  }
-  .rail-label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 9px 8px 6px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--color-ink-3);
-  }
-  .rail-label span {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .rail-item {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    width: 100%;
-    padding: 7px 10px;
-    min-height: 44px;
-    font-family: var(--font-mono);
-    font-size: 14px;
-    color: var(--color-ink-2);
-    background: transparent;
-    border: 0;
-    border-radius: var(--radius-item);
-    text-align: left;
-    text-decoration: none;
-    cursor: pointer;
-  }
-  .rail-item + .rail-item {
-    margin-top: 2px;
-  }
-  .rail-item:hover {
-    background: var(--color-raised);
-    color: var(--color-ink);
-  }
-  .rail-item.active {
-    background: var(--color-raised-2);
-    color: var(--color-ink);
-    font-weight: 600;
-  }
-  .rail-item.active::before {
-    content: "";
-    position: absolute;
-    left: -8px;
-    top: 50%;
-    width: 3px;
-    height: 20px;
-    margin-top: -10px;
-    background: var(--color-brand);
-    border-radius: 0 2px 2px 0;
-  }
-  .rail-hash {
-    color: var(--color-ink-3);
-  }
-  .rail-item.active .rail-hash {
-    color: var(--color-brand);
-  }
-  .rail-me {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 9px 12px;
-    background: var(--color-panel-2);
-    border-top: 1px solid var(--color-line-2);
-  }
-  .rail-me i {
-    width: 7px;
-    height: 7px;
-    flex: 0 0 auto;
-    background: var(--color-brand);
-  }
-  .rail-me-name {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--color-brand);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .rail-me-sub {
-    font-size: 11px;
-    color: var(--color-ink-3);
-  }
-  .rail-me-btn {
-    flex: 0 0 auto;
-    min-height: 30px;
-    padding: 0 9px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--color-ink-3);
-    background: transparent;
-    border: 1px solid var(--color-line-2);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-  }
-  .rail-me-btn:hover {
-    color: var(--color-ink);
-    border-color: var(--color-line-3);
-  }
-
-  /* ----- centre: chat ----- */
 
   .chat {
     display: flex;
     flex-direction: column;
+    min-width: 0;
     min-height: 0;
     background: var(--color-ground);
   }
   .chat-head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 11px;
-    padding: 13px 16px;
+    padding: 11px 16px;
     flex: 0 0 auto;
+    min-width: 0;
+    background: var(--color-panel);
     border-bottom: 1px solid var(--color-line-2);
   }
   .chat-title {
+    flex: 0 0 auto;
     font-family: var(--font-mono);
     font-size: 14px;
     font-weight: 600;
   }
   .chat-sub {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 12px;
     color: var(--color-ink-3);
   }
   .chat-state {
+    flex: 0 0 auto;
     margin-left: auto;
   }
 
@@ -177,7 +61,7 @@
     border-left: 2px solid transparent;
   }
   .row:nth-child(odd) {
-    background: rgba(255, 255, 255, 0.022);
+    background: var(--row-zebra);
   }
   .row:hover {
     background: var(--color-panel-2);
@@ -221,7 +105,7 @@
     padding: 0 8px;
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--color-ink-3);
+    color: var(--color-ink-2);
     background: var(--color-panel);
     border: 1px solid var(--color-line-2);
     border-radius: var(--radius-sm);
@@ -237,11 +121,8 @@
   }
   .row.flagged {
     border-left-color: var(--color-brand);
+    background: var(--brand-dim);
   }
-
-  /* Never written to the store (VRIP-10). The marker is permanent rather than
-     hover-revealed like .row-time: it says the message was not saved, which is
-     the property, and the countdown is only how long it stays on screen. */
   .row.row-temp {
     border-left-color: var(--color-line-3);
   }
@@ -253,7 +134,7 @@
     font-variant-numeric: tabular-nums;
     color: var(--color-ink-3);
     background: var(--color-panel-2);
-    border: 1px solid var(--color-line);
+    border: 1px solid var(--color-line-2);
     border-radius: var(--radius-sm);
   }
   .row.deleted .row-body,
@@ -286,8 +167,11 @@
     flex: 0 0 auto;
     display: flex;
     gap: 9px;
-    padding: 12px 16px 14px;
-    background: var(--color-ground);
+    padding: 10px max(16px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+    background: var(--color-panel);
+    border-top: 1px solid var(--color-line-2);
   }
   .composer input {
     flex: 1 1 auto;
@@ -296,7 +180,7 @@
     font-family: var(--font-sans);
     font-size: 16px;
     color: var(--color-ink);
-    background: var(--color-panel-2);
+    background: var(--color-ground);
     border: 1px solid var(--color-line-2);
     border-radius: var(--radius-item);
   }
@@ -314,52 +198,14 @@
   }
   .composer .btn {
     height: 44px;
-    min-width: 64px;
+    min-width: 68px;
     border-radius: var(--radius-item);
-  }
-
-  .members {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    background: var(--color-panel);
-    border-left: 1px solid var(--color-line-2);
-    padding: 10px 8px 14px;
-    overflow-y: auto;
-  }
-  .member {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 6px 10px;
-    min-height: 30px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    border-radius: var(--radius-item);
-  }
-  .member:hover {
-    background: var(--color-raised);
-  }
-  .member i {
-    width: 5px;
-    height: 5px;
-    flex: 0 0 auto;
-  }
-  .member span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .member.self {
-    background: var(--color-panel-2);
   }
 }
 
-/* The prototype hid both rails below 720px, which left a phone with no way to
-   see who is online. The member list moves into a sheet instead. */
 @media (max-width: 1040px) {
   .room {
-    grid-template-columns: 214px minmax(0, 1fr);
+    grid-template-columns: 232px minmax(0, 1fr);
   }
   .members {
     display: none;
@@ -373,14 +219,46 @@
   .rail {
     display: none;
   }
+  .chat-head {
+    gap: 8px;
+    padding: 9px max(12px, env(safe-area-inset-right)) 9px
+      max(12px, env(safe-area-inset-left));
+  }
+  .sys {
+    padding: 6px max(12px, env(safe-area-inset-right)) 6px
+      max(12px, env(safe-area-inset-left));
+  }
+  .row {
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 7px;
+    padding: 6px max(12px, env(safe-area-inset-right)) 6px
+      max(12px, env(safe-area-inset-left));
+  }
+  .row-handle {
+    font-size: 13.5px;
+  }
+  .row-body {
+    font-size: 14px;
+    min-width: 140px;
+  }
   .row-time {
     display: none;
   }
   .row-act {
     opacity: 1;
+    margin-left: auto;
   }
   .row-btn {
-    min-width: 44px;
-    height: 44px;
+    min-width: 34px;
+    height: 26px;
+    padding: 0 7px;
+    font-size: 10.5px;
+  }
+  .composer {
+    gap: 8px;
+    padding: 8px max(12px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
   }
 }

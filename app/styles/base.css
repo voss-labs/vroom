@@ -34,6 +34,23 @@
 :root {
   --brand-dim: rgba(251, 122, 60, 0.13);
   --neg-dim: rgba(159, 72, 72, 0.13);
+  --ok-dim: rgba(92, 184, 138, 0.12);
+  --row-zebra: rgba(255, 255, 255, 0.022);
+  --btn-primary-fg: #1a0d05;
+  --btn-primary-hover: #ff8d55;
+  --scroll-thumb: #2a2826;
+  --scroll-thumb-hover: #3f3b38;
+
+  /* Handle palette — matched lightness for dark terminal ground */
+  --handle-0: #5cb88a;
+  --handle-1: #4fa9a6;
+  --handle-2: #5f9fd0;
+  --handle-3: #8093dd;
+  --handle-4: #a98ad4;
+  --handle-5: #c98ac0;
+  --handle-6: #cfa04e;
+  --handle-7: #8fb45f;
+
   /* One radius. Every surface and control shares it, so nothing looks
      borrowed from a different design. Only status dots stay circular. */
   --radius: 4px;
@@ -44,9 +61,59 @@
   color-scheme: dark;
 }
 
+:root[data-theme="light"] {
+  --color-ground: #f5f3ef;
+  --color-panel: #ffffff;
+  --color-panel-2: #eeebe5;
+  --color-raised: #e4e0d8;
+  --color-raised-2: #d8d3c8;
+  --color-line: #e2ded6;
+  --color-line-2: #c8c2b8;
+  --color-line-3: #968f84;
+
+  --color-ink: #141311;
+  --color-ink-2: #45413c;
+  --color-ink-3: #6b655e;
+
+  --color-brand: #d44d13;
+  --color-brand-deep: #9e3408;
+
+  --color-neg: #b42929;
+  --color-ok: #177847;
+
+  --brand-dim: rgba(212, 77, 19, 0.12);
+  --neg-dim: rgba(180, 41, 41, 0.1);
+  --ok-dim: rgba(23, 120, 71, 0.1);
+  --row-zebra: rgba(20, 19, 17, 0.03);
+  --btn-primary-fg: #ffffff;
+  --btn-primary-hover: #bd420d;
+  --scroll-thumb: #c5bfb4;
+  --scroll-thumb-hover: #9e978b;
+
+  /* Handle palette — darkened for high WCAG contrast on stone/white */
+  --handle-0: #167547;
+  --handle-1: #116b68;
+  --handle-2: #185a8f;
+  --handle-3: #39499c;
+  --handle-4: #643c96;
+  --handle-5: #8c3281;
+  --handle-6: #8f5c08;
+  --handle-7: #446e14;
+
+  color-scheme: light;
+}
+
 @layer base {
   * {
     box-sizing: border-box;
+  }
+
+  html,
+  body {
+    max-width: 100vw;
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -67,13 +134,13 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2a2826;
+    background: var(--scroll-thumb);
     border: 3px solid transparent;
     background-clip: padding-box;
     border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3f3b38;
+    background: var(--scroll-thumb-hover);
     background-clip: padding-box;
   }
 
@@ -113,16 +180,16 @@
   .btn-primary {
     background: var(--color-brand);
     border-color: var(--color-brand);
-    color: #1a0d05;
+    color: var(--btn-primary-fg);
     font-weight: 600;
   }
   .btn-primary:hover:not(:disabled) {
-    background: #ff8d55;
-    border-color: #ff8d55;
+    background: var(--btn-primary-hover);
+    border-color: var(--btn-primary-hover);
   }
   .btn-danger {
     color: var(--color-neg);
-    border-color: rgba(159, 72, 72, 0.35);
+    border-color: color-mix(in srgb, var(--color-neg) 40%, transparent);
   }
   .btn-danger:hover:not(:disabled) {
     background: var(--neg-dim);
@@ -153,11 +220,13 @@
   }
   .tag-live {
     color: var(--color-ok);
-    border-color: rgba(92, 184, 138, 0.3);
+    background: var(--ok-dim);
+    border-color: color-mix(in srgb, var(--color-ok) 38%, transparent);
   }
   .tag-dead {
     color: var(--color-neg);
-    border-color: rgba(159, 72, 72, 0.35);
+    background: var(--neg-dim);
+    border-color: color-mix(in srgb, var(--color-neg) 40%, transparent);
   }
 
   .mark {
@@ -176,27 +245,34 @@
     display: flex;
     flex-direction: column;
     height: 100dvh;
-    min-height: 480px;
+    max-height: 100dvh;
+    min-height: 0;
+    width: 100%;
+    overflow: hidden;
   }
 
   .topbar {
     display: flex;
     align-items: center;
-    gap: 18px;
-    padding: 0 16px;
-    height: 48px;
+    gap: 14px;
+    padding-top: env(safe-area-inset-top);
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-left: max(16px, env(safe-area-inset-left));
+    min-height: calc(48px + env(safe-area-inset-top));
     flex: 0 0 auto;
     background: var(--color-panel);
     border-bottom: 1px solid var(--color-line-2);
   }
   .wordmark {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: 9px;
     font-family: var(--font-mono);
     font-size: 14px;
     font-weight: 600;
     letter-spacing: 0.06em;
+    white-space: nowrap;
   }
   .wordmark i {
     width: 3px;
@@ -214,10 +290,18 @@
 
   .tabs {
     display: flex;
-    gap: 2px;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar {
+    display: none;
   }
   .tab {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     padding: 5px 12px;
     min-height: 32px;
@@ -230,6 +314,7 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     text-decoration: none;
+    white-space: nowrap;
   }
   .tab:hover {
     color: var(--color-ink-2);
@@ -254,7 +339,36 @@
 }
 
 @media (max-width: 720px) {
+  .topbar {
+    gap: 8px;
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-left: max(12px, env(safe-area-inset-left));
+  }
+  .wordmark {
+    gap: 6px;
+    font-size: 13px;
+  }
   .wordmark small {
     display: none;
+  }
+  .tab {
+    padding: 4px 8px;
+    min-height: 34px;
+    font-size: 11.5px;
+  }
+}
+
+@media (max-width: 380px) {
+  .topbar {
+    gap: 6px;
+    padding-right: max(10px, env(safe-area-inset-right));
+    padding-left: max(10px, env(safe-area-inset-left));
+  }
+  .wordmark {
+    font-size: 12px;
+  }
+  .tab {
+    padding: 4px 7px;
+    font-size: 11px;
   }
 }

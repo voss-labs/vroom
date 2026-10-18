@@ -27,28 +27,42 @@ function day(at: number): string {
 }
 
 function Stat({
+  tag,
   label,
   value,
   note,
+  tone,
 }: {
+  tag: string;
   label: string;
   value: number | null;
   note: string;
+  tone?: "alert" | "ok";
 }) {
   return (
-    <div className="stat">
-      <div className="stat-k">{label}</div>
-      <div className="stat-v">
-        {value === null ? (
-          <>
-            <span aria-hidden="true">—</span>
-            <span className="sr">unavailable</span>
-          </>
-        ) : (
-          count(value)
-        )}
+    <div className="stat overflow-hidden p-0">
+      <div className="rail-card-head px-3.5 py-1.5">
+        <span>{tag}</span>
+        {tone === "alert" && value && value > 0 ? (
+          <span className="text-neg">action needed</span>
+        ) : tone === "ok" && value !== null ? (
+          <span className="text-ok">live</span>
+        ) : null}
       </div>
-      <div className="stat-n">{note}</div>
+      <div className="p-3.5">
+        <div className="stat-k">{label}</div>
+        <div className="stat-v">
+          {value === null ? (
+            <>
+              <span aria-hidden="true">—</span>
+              <span className="sr">unavailable</span>
+            </>
+          ) : (
+            count(value)
+          )}
+        </div>
+        <div className="stat-n">{note}</div>
+      </div>
     </div>
   );
 }
@@ -66,19 +80,29 @@ export function StatCards({
   return (
     <div className="stats">
       <Stat
+        tag="Queue"
         label="Open reports"
         value={openReports}
         note="awaiting a decision"
+        tone="alert"
       />
       <Stat
+        tag="Presence"
         label="Online now"
         value={online}
         note={
           peakToday === null ? unreachable : `peak today ${count(peakToday)}`
         }
+        tone="ok"
       />
-      <Stat label="Suspended" value={suspended} note="cannot rejoin" />
       <Stat
+        tag="Enforcement"
+        label="Suspended"
+        value={suspended}
+        note="cannot rejoin"
+      />
+      <Stat
+        tag="Retention"
         label="Messages in 48h window"
         value={messages}
         note={
