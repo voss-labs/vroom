@@ -48,6 +48,7 @@ export interface MemberSheetProps {
   self: string;
   blockCount: number;
   onClearBlocks: () => void;
+  onMention?: (who: string) => void;
 }
 
 export function MemberSheet({
@@ -58,6 +59,7 @@ export function MemberSheet({
   self,
   blockCount,
   onClearBlocks,
+  onMention,
 }: MemberSheetProps) {
   const ref = useRef<HTMLDialogElement | null>(null);
 
@@ -102,7 +104,18 @@ export function MemberSheet({
         <div className="rail-label">
           Online <span>{members.length}</span>
         </div>
-        <MemberList members={members} self={self} />
+        <MemberList
+          members={members}
+          self={self}
+          onMention={
+            onMention
+              ? (who) => {
+                  onMention(who);
+                  onClose();
+                }
+              : undefined
+          }
+        />
       </div>
 
       <HandlePanel

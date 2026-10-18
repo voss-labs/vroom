@@ -25,6 +25,8 @@ export interface MessageListProps {
   onReport: (msg: Msg) => void;
   onBlock: (who: string) => void;
   onWithdraw: (msg: Msg) => void;
+  onMention?: (who: string) => void;
+  onStarter?: (text: string) => void;
   room: RoomMeta;
 }
 
@@ -47,6 +49,8 @@ export function MessageList({
   onReport,
   onBlock,
   onWithdraw,
+  onMention,
+  onStarter,
   room,
 }: MessageListProps) {
   const logRef = useRef<HTMLDivElement | null>(null);
@@ -119,7 +123,9 @@ export function MessageList({
           <div className="sys">loading earlier messages</div>
         ) : null}
         {!loadingMore && !hasMore && hasMessages ? (
-          <div className="sys">this is the beginning of {room.name}</div>
+          <div className="sys">
+            this is the beginning of {room.name} (last 48 hours)
+          </div>
         ) : null}
 
         {entries.map((entry) => {
@@ -135,6 +141,7 @@ export function MessageList({
                 onReport={onReport}
                 onBlock={onBlock}
                 onWithdraw={onWithdraw}
+                onMention={onMention}
               />
             );
           }
@@ -159,11 +166,25 @@ export function MessageList({
           <div className="empty">joining {room.name}</div>
         ) : null}
         {!joining && !hasMessages ? (
-          <div className="empty">
-            <p className="text-ink-2 m-0">
-              Nobody has said anything yet. You could be first.
+          <div className="empty mx-auto max-w-[460px]">
+            <p className="text-ink-2 m-0 font-medium">
+              Nobody has said anything in the last 48 hours. You could be first.
             </p>
             <p className="mt-1 mb-0">{room.empty}</p>
+            {onStarter && room.starters.length > 0 ? (
+              <div className="mt-4 flex flex-wrap justify-center gap-1.5">
+                {room.starters.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => onStarter(prompt)}
+                    className="border-line-2 bg-panel-2 text-ink-2 hover:border-brand/50 hover:bg-raised hover:text-ink cursor-pointer rounded-[var(--r-ctl)] border px-2.5 py-1.5 text-left text-[12px] transition-colors"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

@@ -185,6 +185,7 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-[9px]">
+          <span className="tag max-[640px]:hidden">48h room retention</span>
           <span className={stats ? "tag tag-live" : "tag"}>
             {stats ? (
               <>
@@ -205,9 +206,9 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
               Moderation
             </h1>
             <p className="text-ink-2 mt-1.5 max-w-[68ch] text-[14px] leading-[1.6]">
-              Students see handles only. You can resolve a handle to a real
-              account, and every time you do it is recorded against the message
-              that justified it.
+              Students hold device keys only — there is no name or email behind
+              a handle. Room messages disappear after 48 hours, while reported
+              snapshots and every moderator action are kept in the audit trail.
             </p>
           </div>
 
@@ -220,7 +221,11 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
             since={stats ? stats.since : null}
           />
 
-          <RoomSwitch killed={roomState ? roomState.killed : null} />
+          <RoomSwitch
+            killed={roomState ? roomState.killed : null}
+            killedAt={roomState ? roomState.killedAt : null}
+            killedBy={roomState ? roomState.killedBy : null}
+          />
 
           <ReportTable
             reports={reports}

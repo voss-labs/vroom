@@ -1,4 +1,6 @@
-import { auditTime } from "~/lib/utils";
+import { useMemo, useState } from "react";
+
+import { auditTime, cn } from "~/lib/utils";
 
 /**
  * The moderation trail, newest first.
@@ -30,6 +32,9 @@ const LABELS: Record<string, string> = {
   room_close: "close",
   room_open: "open",
 };
+
+type AuditFilter =
+  "all" | "suspend" | "delete_message" | "dismiss_report" | "room";
 
 /** Muted red for anything that removes someone, brand orange for a reveal. */
 function tone(action: string): string {
@@ -75,7 +80,9 @@ function describe(entry: AuditRow): string {
     case "dismiss_report":
       return `report ${short(entry.targetId)} dismissed by ${actor}`;
     case "room_close":
-      return `kill switch on by ${actor}, all posting halted`;
+      return `kill switch on by ${actor}, all posting halted${
+        reason ? ` — ${reason}` : ""
+      }`;
     case "room_open":
       return `kill switch off by ${actor}, posting resumed`;
     default:
@@ -84,21 +91,98 @@ function describe(entry: AuditRow): string {
 }
 
 export function AuditList({ entries }: { entries: AuditRow[] }) {
+  const [filter, setFilter] = useState<AuditFilter>("all");
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return entries.filter((entry) => {
+      if (
+        filter === "suspend" &&
+        entry.action !== "suspend" &&
+        entry.action !== "restore"
+      ) {
+        return false;
+      }
+      if (filter === "delete_message" && entry.action !== "delete_message") {
+        return false;
+      }
+      if (filter === "dismiss_report" && entry.action !== "dismiss_report") {
+        return false;
+      }
+      if (
+        filter === "room" &&
+        entry.action !== "room_close" &&
+        entry.action !== "room_open"
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        describe(entry).toLowerCase().includes(q) ||
+        (LABELS[entry.action] ?? entry.action).toLowerCase().includes(q)
+      );
+    });
+  }, [entries, filter, search]);
+
   return (
     <section className="sec">
       <div className="sec-head pb-[14px]">
         <h2>Audit</h2>
         <p>
-          Every moderator action, newest first. A reveal records the message it
-          was bound to.
+          Every moderator action across the console and CLI script, newest
+          first.
         </p>
       </div>
 
+      {entries.length > 0 && (
+        <div className="toolbar pt-0">
+          <input
+            className="inp"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search audit trail..."
+            aria-label="Search audit trail"
+          />
+          <div
+            className="flex flex-wrap items-center gap-1"
+            role="group"
+            aria-label="Filter audit actions"
+          >
+            {(
+              [
+                ["all", "All"],
+                ["suspend", "Suspensions"],
+                ["delete_message", "Deletions"],
+                ["dismiss_report", "Dismissals"],
+                ["room", "Kill switch"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setFilter(key)}
+                className={cn(
+                  "btn btn-sm",
+                  filter === key && "border-brand text-ink bg-raised",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="border-line-2 border-t">
-        {entries.length === 0 ? (
-          <div className="empty">Nothing has been done yet.</div>
+        {filtered.length === 0 ? (
+          <div className="empty">
+            {entries.length === 0
+              ? "Nothing has been done yet."
+              : "No audit entries match that filter."}
+          </div>
         ) : (
-          entries.map((entry) => (
+          filtered.map((entry) => (
             <div className="audit-line" key={entry.id}>
               <span className="audit-t">{auditTime(entry.createdAt)}</span>
               <span className={tone(entry.action)}>

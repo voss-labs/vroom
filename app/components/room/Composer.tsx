@@ -27,12 +27,18 @@ const DIALOG =
   "m-auto w-[calc(100%-32px)] max-w-[440px] rounded-[var(--r-card)] border border-line-2 " +
   "bg-panel p-0 text-ink backdrop:bg-black/60";
 
+export interface ComposerDraft {
+  text: string;
+  seq: number;
+}
+
 export interface ComposerProps {
   killed: boolean;
   connected: boolean;
   /** Returns false when the socket refused the frame; the input then keeps it. */
   onSend: (body: string, confirmed: boolean) => boolean;
   room: RoomMeta;
+  draft?: ComposerDraft | null;
 }
 
 interface Pending {
@@ -40,11 +46,31 @@ interface Pending {
   matches: string[];
 }
 
-export function Composer({ killed, connected, onSend, room }: ComposerProps) {
+export function Composer({
+  killed,
+  connected,
+  onSend,
+  room,
+  draft,
+}: ComposerProps) {
   const [value, setValue] = useState("");
   const [pending, setPending] = useState<Pending | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const disabled = killed || !connected;
   const counting = value.length > COUNTER_FROM;
+
+  useEffect(() => {
+    if (!draft) return;
+    setValue((prev) => {
+      if (draft.text.startsWith("@")) {
+        const prefix = draft.text;
+        if (prev.startsWith(prefix)) return prev;
+        return `${prefix}${prev}`.slice(0, LIMIT);
+      }
+      return draft.text.slice(0, LIMIT);
+    });
+    inputRef.current?.focus();
+  }, [draft]);
 
   function send(body: string, confirmed: boolean) {
     if (onSend(body, confirmed)) setValue("");
@@ -71,6 +97,7 @@ export function Composer({ killed, connected, onSend, room }: ComposerProps) {
         </label>
         <div className="relative flex min-w-0 flex-1">
           <input
+            ref={inputRef}
             id="msg"
             className={cn("w-full", counting && "pr-11")}
             autoComplete="off"

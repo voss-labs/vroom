@@ -14,6 +14,7 @@ export interface MessageRowProps {
   onReport: (msg: Msg) => void;
   onBlock: (who: string) => void;
   onWithdraw: (msg: Msg) => void;
+  onMention?: (who: string) => void;
 }
 
 function Row({
@@ -25,11 +26,19 @@ function Row({
   onReport,
   onBlock,
   onWithdraw,
+  onMention,
 }: MessageRowProps) {
   const mine = msg.who === self;
   const actionable = !mine && !deleted && !blocked;
   // A withdrawn message still renders, so the conversation around it reads.
   const withdrawable = mine && !deleted;
+
+  const mentioned =
+    !mine &&
+    !deleted &&
+    !blocked &&
+    Boolean(self) &&
+    msg.body.toLowerCase().includes(`@${self.toLowerCase()}`);
 
   let body = msg.body;
   if (deleted === "author") body = "message withdrawn by its author";
@@ -37,18 +46,50 @@ function Row({
   else if (blocked) body = "you blocked this person";
 
   return (
-    <div className={cn("row", deleted && "deleted", blocked && "blocked")}>
-      <span
-        className="row-handle"
-        style={blocked ? undefined : { color: handleColour(msg.who, self) }}
-      >
-        {blocked ? "blocked:" : `${msg.who}:`}
-      </span>
+    <div
+      className={cn(
+        "row",
+        deleted && "deleted",
+        blocked && "blocked",
+        mentioned && "flagged",
+      )}
+    >
+      {blocked ? (
+        <span className="row-handle">blocked:</span>
+      ) : onMention ? (
+        <button
+          type="button"
+          className="row-handle cursor-pointer border-0 bg-transparent p-0 text-left hover:underline"
+          style={{ color: handleColour(msg.who, self) }}
+          title={`Mention @${msg.who}`}
+          onClick={() => onMention(msg.who)}
+        >
+          {msg.who}:
+        </button>
+      ) : (
+        <span
+          className="row-handle"
+          style={{ color: handleColour(msg.who, self) }}
+        >
+          {msg.who}:
+        </span>
+      )}
       <span className="row-body">{body}</span>
       <span className="row-time">{clockTime(msg.at)}</span>
 
       {actionable ? (
         <div className="row-act">
+          {onMention ? (
+            <button
+              type="button"
+              className="row-btn"
+              aria-label={`Reply to ${msg.who}`}
+              title={`Mention @${msg.who} in composer`}
+              onClick={() => onMention(msg.who)}
+            >
+              reply
+            </button>
+          ) : null}
           <button
             type="button"
             className="row-btn disabled:cursor-default disabled:opacity-60"

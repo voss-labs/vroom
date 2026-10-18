@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { data } from "react-router";
 
 import type { Route } from "./+types/room";
-import { Composer } from "~/components/room/Composer";
+import { Composer, type ComposerDraft } from "~/components/room/Composer";
 import { ConnectionState } from "~/components/room/ConnectionState";
 import { MemberRail } from "~/components/room/MemberRail";
 import { MemberSheet } from "~/components/room/MemberSheet";
@@ -21,6 +21,7 @@ import {
 import { ROOMS, isRoomId } from "~/lib/rooms";
 import {
   EPHEMERAL_TTL_MS,
+  MESSAGE_TTL_MS,
   type DeletedBy,
   type EphemeralMsg,
   type Msg,
@@ -34,35 +35,24 @@ export function meta({ loaderData }: Route.MetaArgs) {
     { name: "description", content: loaderData.room.subtitle },
   ];
 }
-
 export async function loader({ request, params }: Route.LoaderArgs) {
   const actor = await requireSession(request);
-  if (!isRoomId(params.roomId)) {
-    throw data("No such room.", { status: 404 });
-  }
+  if (!isRoomId(params.roomId)) throw data("No such room.", { status: 404 });
   const member = await ensurePseudonym(actor.member);
-
   return {
     pseudonym: member.pseudonym ?? "",
     isModerator: actor.member.isModerator,
     room: ROOMS[params.roomId],
   };
 }
-
 const EMPTY: ReadonlySet<string> = new Set();
-/** Which messages have left the room, and by whose hand (VRIP-11). */
 const NONE_DELETED: ReadonlyMap<string, DeletedBy> = new Map();
-
-function toEntry(msg: Msg): LogEntry {
-  return { kind: "msg", key: `m-${msg.id}`, msg };
-}
-
-/** Distinct from a stored message's key, so the two can never collide. */
-function tempKey(id: string): string {
-  return `t-${id}`;
-}
-
-/** Keyed on the room, so switching rooms remounts with an empty log and a fresh socket. */
+const toEntry = (m: Msg): LogEntry => ({
+  kind: "msg",
+  key: `m-${m.id}`,
+  msg: m,
+});
+const tempKey = (id: string): string => `t-${id}`;
 export default function RoomRoute({ loaderData }: Route.ComponentProps) {
   return <RoomView key={loaderData.room.id} loaderData={loaderData} />;
 }
@@ -86,10 +76,19 @@ function RoomView({
     useState<ReadonlyMap<string, DeletedBy>>(NONE_DELETED);
   const [reported, setReported] = useState<ReadonlySet<string>>(EMPTY);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [draft, setDraft] = useState<ComposerDraft | null>(null);
+  const draftSeq = useRef(0);
 
-  // The sheet is only reachable below 1040px, but nothing closed it when the
-  // viewport grew past that — a stale sheet then sat on top of the composer on
-  // desktop, and the input looked missing.
+  const handleMention = useCallback((who: string) => {
+    draftSeq.current += 1;
+    setDraft({ text: `@${who} `, seq: draftSeq.current });
+  }, []);
+
+  const handleStarter = useCallback((text: string) => {
+    draftSeq.current += 1;
+    setDraft({ text, seq: draftSeq.current });
+  }, []);
+
   useEffect(() => {
     const wide = window.matchMedia("(min-width: 1041px)");
     const sync = () => {
@@ -105,8 +104,6 @@ function RoomView({
   const systemSeq = useRef(0);
   const expiries = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
-  // Presentation only. A client that skipped this timer would gain nothing:
-  // the message was never stored, so there is nothing to come back for.
   const expire = useCallback((msg: EphemeralMsg) => {
     const key = tempKey(msg.id);
     const timer = setTimeout(() => {
@@ -124,13 +121,23 @@ function RoomView({
     };
   }, []);
 
+  useEffect(() => {
+    const sweep = setInterval(() => {
+      const cutoff = Date.now() - MESSAGE_TTL_MS;
+      setEntries((prev) => {
+        if (!prev.some((e) => e.kind === "msg" && e.msg.at <= cutoff))
+          return prev;
+        return prev.filter((e) => e.kind !== "msg" || e.msg.at > cutoff);
+      });
+    }, 30_000);
+    return () => clearInterval(sweep);
+  }, []);
+
   const pushSystem = useCallback((tone: SystemTone, text: string) => {
     systemSeq.current += 1;
     const key = `sys-${systemSeq.current}`;
     setEntries((prev) => [...prev, { kind: "system", key, tone, text }]);
   }, []);
-
-  /* ---------------- the socket ---------------- */
 
   useEffect(() => {
     const socket = new RoomConnection(room.id, {
@@ -143,12 +150,8 @@ function RoomView({
         setHasMore(ready.hasMore);
         setLoadingMore(false);
         setDeleted(NONE_DELETED);
-        // The log is replaced wholesale, so any pending removals are moot. The
-        // messages they pointed at were never stored and do not come back.
         for (const timer of expiries.current.values()) clearTimeout(timer);
         expiries.current.clear();
-        // The joined line goes last: the page above it is what was said before
-        // you arrived, and a backfill prepends further above that.
         setEntries([
           ...ready.messages.map(toEntry),
           {
@@ -186,9 +189,7 @@ function RoomView({
         setMembers(list);
       },
 
-      // The room broadcasts its own system line for this, so do not add one.
       onRoom: setKilled,
-
       onSystem: pushSystem,
 
       onHistory(messages, more) {
@@ -199,9 +200,6 @@ function RoomView({
       },
 
       onError(code, message, retryAfter) {
-        // Backfill is the only request left in flight when an error arrives, and
-        // it can now be refused by the object's history budget. Without this the
-        // loading row never clears and no further page is ever requested.
         setLoadingMore(false);
         const text =
           code === "rate_limited" && retryAfter
@@ -218,8 +216,6 @@ function RoomView({
       connection.current = null;
     };
   }, [expire, pushSystem, room.id]);
-
-  /* ---------------- blocking, presentation only ---------------- */
 
   const applyBlocked = useCallback((next: Set<string>, persist: boolean) => {
     blockedRef.current = next;
@@ -244,8 +240,6 @@ function RoomView({
     () => applyBlocked(new Set(), true),
     [applyBlocked],
   );
-
-  /* ---------------- reporting, backfill, sending ---------------- */
 
   const handleReport = useCallback(
     async (msg: Msg) => {
@@ -277,9 +271,6 @@ function RoomView({
     [pushSystem, room.id],
   );
 
-  // Only the stored arm carries a seq, so an ephemeral message can never become
-  // the paging cursor and ask the room for history "before" something it has
-  // never heard of.
   const oldestSeq = useMemo(() => {
     for (const entry of entries) if (entry.kind === "msg") return entry.msg.seq;
     return null;
@@ -291,8 +282,6 @@ function RoomView({
     if (!connection.current?.requestHistory(oldestSeq)) setLoadingMore(false);
   }, [hasMore, loadingMore, oldestSeq]);
 
-  // No optimistic removal: the room broadcasts the withdrawal back to this
-  // socket like any other, so the row changes when the room agrees it has.
   const handleWithdraw = useCallback(
     (msg: Msg) => {
       const sent = connection.current?.withdraw(msg.id) ?? false;
@@ -317,8 +306,6 @@ function RoomView({
     },
     [pushSystem],
   );
-
-  /* ---------------- render ---------------- */
 
   const roster = useMemo(() => {
     return [...members].sort((a, b) => {
@@ -350,6 +337,12 @@ function RoomView({
           <div className="chat-head">
             <span className="chat-title">#{room.id}</span>
             <span className="chat-sub">{room.subtitle}</span>
+            <span
+              className="row-tag max-[540px]:hidden"
+              title="Messages disappear after 48 hours and are deleted from the room database"
+            >
+              48h window
+            </span>
             <span className="chat-state" aria-live="polite">
               <ConnectionState state={status} killed={killed} />
             </span>
@@ -368,6 +361,8 @@ function RoomView({
             onReport={handleReport}
             onBlock={handleBlock}
             onWithdraw={handleWithdraw}
+            onMention={handleMention}
+            onStarter={handleStarter}
             room={room}
           />
 
@@ -376,10 +371,15 @@ function RoomView({
             connected={status === "open"}
             onSend={handleSend}
             room={room}
+            draft={draft}
           />
         </main>
 
-        <MemberRail members={roster} self={pseudonym} />
+        <MemberRail
+          members={roster}
+          self={pseudonym}
+          onMention={handleMention}
+        />
       </div>
 
       <MemberSheet
@@ -390,6 +390,7 @@ function RoomView({
         self={pseudonym}
         blockCount={blocked.size}
         onClearBlocks={handleClearBlocks}
+        onMention={handleMention}
       />
     </div>
   );

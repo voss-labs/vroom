@@ -9,6 +9,7 @@ import {
   enterWithDeviceKey,
 } from "~/lib/device-key.client";
 import { resolveActor } from "~/lib/require-role.server";
+import { ROOM_IDS, ROOMS } from "~/lib/rooms";
 import { isVAuthSignInOpen } from "~/lib/sign-in.server";
 
 export function meta() {
@@ -16,7 +17,8 @@ export function meta() {
     { title: "V Rooms" },
     {
       name: "description",
-      content: "One room, the whole college. Anonymous, for VIT students.",
+      content:
+        "One room, the whole college. Anonymous, real-time campus rooms for VIT students.",
     },
   ];
 }
@@ -30,53 +32,104 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function Home({ loaderData }: Route.ComponentProps) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[560px] flex-col justify-center px-5 py-16">
-      <div className="wordmark mb-10">
-        <i />V ROOMS <small>voss labs</small>
+    <main className="mx-auto flex min-h-dvh max-w-[600px] flex-col justify-center px-5 py-14">
+      <div className="mb-8 flex items-center justify-between">
+        <div className="wordmark">
+          <i />V ROOMS <small>voss labs</small>
+        </div>
+        <span className="tag">48h disappearing window</span>
       </div>
 
-      <h1 className="mb-4 text-[28px] leading-tight font-semibold tracking-tight text-balance">
+      <h1 className="mb-3 text-[28px] leading-tight font-semibold tracking-tight text-balance">
         One room, the whole college.
       </h1>
 
-      <p className="text-ink-2 mb-5 text-[15px] leading-relaxed">
-        Campus Live is a single conversation open to every VIT student. No
-        sign-up, no email, no phone number, nobody you have to already know. You
-        get one handle and you keep it on this device.
+      <p className="text-ink-2 mb-6 text-[15px] leading-relaxed">
+        Campus Live and four topic rooms open to every VIT student. No sign-up,
+        no email, no phone number, nobody you have to already know. You get one
+        handle and keep it on this device.
       </p>
-
-      {/* VRIP-13 requires this to be stated plainly, in the product, before anyone enters. */}
-      <div className="border-line-2 bg-panel mb-7 rounded-[10px] border p-4">
-        <h2 className="mb-2 text-[14px] font-semibold">
-          How anonymous this is
-        </h2>
-        <p className="text-ink-2 mb-2 text-[13.5px] leading-relaxed">
-          Other students see a handle and nothing else, and so does VOSS. This
-          browser makes a key that never leaves it, and V Rooms stores only a
-          hash of that key. No name, no email, and no IP address are kept.
-          Cloudflare, which runs the servers, sees your IP address in transit.
-        </p>
-        <p className="text-ink-2 text-[13.5px] leading-relaxed">
-          Nobody can recover your handle. If you clear this site&apos;s data or
-          switch devices, you come back as someone new. Moderators can still
-          remove messages and handles that break the rules.
-        </p>
-      </div>
 
       <EnterButton />
 
-      <p className="text-ink-3 mt-10 text-[12.5px]">
-        Built by{" "}
-        <a
-          className="text-ink-2 underline underline-offset-4"
-          href="https://vosslabs.org"
-        >
-          VOSS Labs
-        </a>
-        . The rooms that do not exist yet are open issues.
-      </p>
+      <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/* VRIP-13 requires this to be stated plainly, in the product, before anyone enters. */}
+        <div className="border-line-2 bg-panel rounded-[var(--r-card)] border p-4">
+          <h2 className="mb-1.5 text-[13.5px] font-semibold">
+            How anonymous this is
+          </h2>
+          <p className="text-ink-2 mb-2 text-[13px] leading-relaxed">
+            Other students see a handle and nothing else, and so does VOSS. This
+            browser makes a key that never leaves it, and V Rooms stores only a
+            hash of that key. No name, no email, and no IP address are kept.
+            Cloudflare, which runs the servers, sees your IP address in transit.
+          </p>
+          <p className="text-ink-2 text-[13px] leading-relaxed">
+            Nobody can recover your handle. Clear this site&apos;s data or
+            switch devices and you come back as someone new.
+          </p>
+        </div>
 
-      {loaderData.moderatorSignInOpen && <ModeratorSignIn />}
+        <div className="border-line-2 bg-panel rounded-[var(--r-card)] border p-4">
+          <h2 className="mb-1.5 text-[13.5px] font-semibold">
+            48-hour disappearing messages
+          </h2>
+          <p className="text-ink-2 mb-2 text-[13px] leading-relaxed">
+            Every stored message in a room automatically disappears 48 hours
+            after it is sent and is deleted from the room database.
+          </p>
+          <p className="text-ink-2 text-[13px] leading-relaxed">
+            You can also withdraw your own messages at any time, or block any
+            handle on your device in one click. Moderators can still remove
+            messages and suspend handles that break the rules.
+          </p>
+        </div>
+      </div>
+
+      <div className="border-line-2 bg-panel mt-3 rounded-[var(--r-card)] border p-4">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h2 className="text-ink-3 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase">
+            5 Live Campus Rooms
+          </h2>
+          <span className="text-ink-3 font-mono text-[11px]">
+            instant switch inside
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {ROOM_IDS.map((id) => {
+            const r = ROOMS[id];
+            return (
+              <div
+                key={id}
+                className="border-line bg-panel-2 flex items-baseline gap-2 rounded-[var(--r-ctl)] border px-3 py-2"
+              >
+                <span className="text-ink font-mono text-[13px] font-semibold">
+                  <span className="text-brand">#</span>
+                  {r.id}
+                </span>
+                <span className="text-ink-3 truncate text-[12px]">
+                  {r.subtitle}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+        <p className="text-ink-3 text-[12.5px]">
+          Built by{" "}
+          <a
+            className="text-ink-2 underline underline-offset-4"
+            href="https://vosslabs.org"
+          >
+            VOSS Labs
+          </a>
+          . The rooms that do not exist yet are open issues.
+        </p>
+
+        {loaderData.moderatorSignInOpen && <ModeratorSignIn />}
+      </div>
     </main>
   );
 }
@@ -113,7 +166,7 @@ function EnterButton() {
         onClick={enter}
         disabled={pending}
       >
-        {pending ? "Entering" : "Enter anonymously"}
+        {pending ? "Entering..." : "Enter anonymously"}
       </button>
       {error && (
         <p role="alert" className="text-neg mt-3 text-[13px]">
@@ -138,10 +191,10 @@ function ModeratorSignIn() {
   }
 
   return (
-    <div className="mt-4">
+    <div>
       <button
         type="button"
-        className="text-ink-3 inline-flex min-h-11 items-center text-[12.5px] underline underline-offset-4"
+        className="text-ink-3 hover:text-ink-2 inline-flex min-h-11 items-center text-[12.5px] underline underline-offset-4"
         onClick={start}
       >
         VOSS moderator? Sign in with V Auth

@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Link } from "react-router";
 
-import { ROOM_IDS, type RoomId } from "~/lib/rooms";
+import { ROOM_IDS, ROOMS, type RoomId } from "~/lib/rooms";
 import { cn } from "~/lib/utils";
 
 export interface HandlePanelProps {
@@ -17,12 +18,29 @@ export function HandlePanel({
   onClearBlocks,
   className,
 }: HandlePanelProps) {
+  const [copied, setCopied] = useState(false);
   const blocking = blockCount > 0;
+
+  function copyHandle() {
+    if (!pseudonym) return;
+    void navigator.clipboard?.writeText(pseudonym).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
   return (
     <div className={cn("rail-me", className)}>
       <i />
       <div className="min-w-0 flex-1">
-        <div className="rail-me-name">{pseudonym || "assigning a handle"}</div>
+        <button
+          type="button"
+          onClick={copyHandle}
+          title={pseudonym ? "Click to copy your handle" : undefined}
+          className="rail-me-name block cursor-pointer border-0 bg-transparent p-0 text-left hover:underline"
+        >
+          {copied ? "copied handle" : pseudonym || "assigning a handle"}
+        </button>
         <div className="rail-me-sub">yours, on this device</div>
       </div>
       <button
@@ -56,17 +74,26 @@ export interface RoomLinksProps {
 export function RoomLinks({ active, onNavigate }: RoomLinksProps) {
   return (
     <>
-      {ROOM_IDS.map((id) => (
-        <Link
-          key={id}
-          to={`/room/${id}`}
-          className={cn("rail-item", id === active && "active")}
-          aria-current={id === active ? "page" : undefined}
-          onClick={onNavigate}
-        >
-          <span className="rail-hash">#</span> {id}
-        </Link>
-      ))}
+      {ROOM_IDS.map((id) => {
+        const meta = ROOMS[id];
+        return (
+          <Link
+            key={id}
+            to={`/room/${id}`}
+            className={cn("rail-item", id === active && "active")}
+            aria-current={id === active ? "page" : undefined}
+            onClick={onNavigate}
+          >
+            <span className="rail-hash">#</span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate">{id}</div>
+              <div className="text-ink-3 truncate font-sans text-[11px] font-normal">
+                {meta.subtitle}
+              </div>
+            </div>
+          </Link>
+        );
+      })}
     </>
   );
 }
@@ -87,7 +114,9 @@ export function RoomRail({
   return (
     <nav className="rail" aria-label="Rooms">
       <div className="rail-scroll">
-        <div className="rail-label">Rooms</div>
+        <div className="rail-label">
+          Rooms <span>{ROOM_IDS.length}</span>
+        </div>
         <RoomLinks active={active} />
       </div>
 

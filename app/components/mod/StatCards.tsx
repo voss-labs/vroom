@@ -79,14 +79,14 @@ export function StatCards({
       />
       <Stat label="Suspended" value={suspended} note="cannot rejoin" />
       <Stat
-        label="Messages kept"
+        label="Messages in 48h window"
         value={messages}
         note={
           messages === null
             ? unreachable
             : since === null
-              ? "nothing yet"
-              : `since ${day(since)}`
+              ? "nothing in last 48h"
+              : `oldest from ${day(since)}`
         }
       />
     </div>
