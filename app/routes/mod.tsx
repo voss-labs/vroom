@@ -1,6 +1,7 @@
 import { Link, data } from "react-router";
 
 import type { Route } from "./+types/mod";
+import { ThemeToggle } from "~/components/ThemeToggle";
 import { AccountTable } from "~/components/mod/AccountTable";
 import { AuditList } from "~/components/mod/AuditList";
 import { ReportTable } from "~/components/mod/ReportTable";
@@ -23,6 +24,7 @@ import { isSameOrigin } from "~/lib/origin.server";
 import { drainPolicyFlags } from "~/lib/policy.server";
 import { ModerationError, requireModerator } from "~/lib/require-role.server";
 import { readRooms } from "~/lib/room.server";
+import { ROOMS } from "~/lib/rooms";
 
 /**
  * The moderator console (VRIP-05). The navigation entry not rendering for a
@@ -186,16 +188,23 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
           </Link>
         </nav>
 
-        <div className="ml-auto flex items-center gap-[9px]">
-          <span className="tag max-[640px]:hidden">48h room retention</span>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <ThemeToggle />
+          {openReports > 0 && (
+            <span className="tag tag-dead max-[540px]:hidden">
+              {openReports} open {openReports === 1 ? "report" : "reports"}
+            </span>
+          )}
+          <span className="tag max-[720px]:hidden">48h retention</span>
           <span className={stats ? "tag tag-live" : "tag"}>
             {stats ? (
               <>
                 <span className="mark" />
-                {stats.online} online
+                {stats.online}
+                <span className="max-[400px]:hidden"> online</span>
               </>
             ) : (
-              <span className="text-ink-3">room unreachable</span>
+              <span className="text-ink-3">unreachable</span>
             )}
           </span>
         </div>
@@ -203,15 +212,24 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
 
       <div className="admin">
         <div className="admin-inner">
-          <div>
-            <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-balance">
-              Moderation
-            </h1>
-            <p className="text-ink-2 mt-1.5 max-w-[68ch] text-[14px] leading-[1.6]">
-              Students hold device keys only — there is no name or email behind
-              a handle. Room messages disappear after 48 hours, while reported
-              snapshots and every moderator action are kept in the audit trail.
-            </p>
+          <div className="border-line-2 bg-panel flex flex-wrap items-start justify-between gap-3 rounded-[var(--r-card)] border p-4">
+            <div>
+              <div className="text-ink-3 mb-1 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase">
+                VOSS Safety Console · VRIP-05 / VRIP-13
+              </div>
+              <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-balance sm:text-[22px]">
+                Moderation
+              </h1>
+              <p className="text-ink-2 mt-1 max-w-[68ch] text-[13.5px] leading-[1.55]">
+                Students hold device keys only — there is no name or email
+                behind a handle. Room messages disappear after 48 hours, while
+                reported snapshots and every moderator action are kept in the
+                audit trail.
+              </p>
+            </div>
+            <Link to="/room" className="btn btn-sm h-9 px-3 font-mono">
+              Open #campus-live →
+            </Link>
           </div>
 
           <StatCards
@@ -230,33 +248,44 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
           />
 
           {perRoom && perRoom.length > 0 ? (
-            <section className="card" aria-label="Room activity">
-              <div className="card-head">
-                <h2>Room Pulse</h2>
-                <span className="tag">5 rooms · 48h window</span>
+            <section className="sec overflow-hidden" aria-label="Room activity">
+              <div className="rail-card-head px-4 py-2.5">
+                <span>Room Pulse · All Channels</span>
+                <span>5 rooms · 48h window</span>
               </div>
-              <div className="divide-line grid grid-cols-5 divide-x max-[860px]:grid-cols-2 max-[520px]:grid-cols-1">
-                {perRoom.map((r) => (
-                  <Link
-                    key={r.roomId}
-                    to={`/room/${r.roomId}`}
-                    className="hover:bg-bg-2 flex items-center justify-between gap-2 px-4 py-3 text-[13px] transition-colors"
-                  >
-                    <span className="text-ink font-mono font-semibold">
-                      #{r.roomId}
-                    </span>
-                    <span className="text-ink-3 font-mono text-[11.5px]">
-                      <strong
-                        className={
-                          r.online > 0 ? "text-ok font-semibold" : "text-ink-3"
-                        }
-                      >
-                        {r.online}
-                      </strong>{" "}
-                      live · {r.messages} msgs
-                    </span>
-                  </Link>
-                ))}
+              <div className="divide-line-2 grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-5">
+                {perRoom.map((r) => {
+                  const meta = ROOMS[r.roomId];
+                  return (
+                    <Link
+                      key={r.roomId}
+                      to={`/room/${r.roomId}`}
+                      className="hover:bg-panel-2 flex flex-col justify-between gap-2 p-3.5 no-underline transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-ink font-mono text-[13px] font-semibold">
+                          <span className="text-brand">#</span>
+                          {r.roomId}
+                        </span>
+                        <span
+                          className={
+                            r.online > 0
+                              ? "badge badge-ok px-1.5 py-0.5 font-mono text-[11px]"
+                              : "badge px-1.5 py-0.5 font-mono text-[11px]"
+                          }
+                        >
+                          {r.online} live
+                        </span>
+                      </div>
+                      <div className="text-ink-3 flex items-center justify-between gap-2 font-mono text-[11px]">
+                        <span className="truncate">{meta?.subtitle ?? ""}</span>
+                        <span className="text-ink-2 shrink-0 tabular-nums">
+                          {r.messages} msgs
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             </section>
           ) : null}

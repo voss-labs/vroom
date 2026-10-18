@@ -41,7 +41,11 @@ export function RoomSwitch({ killed, killedAt, killedBy }: RoomSwitchProps) {
   const unknown = killed === null && submitted === null;
 
   return (
-    <section className="sec">
+    <section className="sec overflow-hidden">
+      <div className="rail-card-head px-4 py-2.5">
+        <span>Emergency Control · Kill Switch</span>
+        <span>VRIP-05 · Durable Object State</span>
+      </div>
       <fetcher.Form
         method="post"
         className="roomctl flex-wrap"
@@ -74,15 +78,32 @@ export function RoomSwitch({ killed, killedAt, killedBy }: RoomSwitchProps) {
             {unknown ? UNKNOWN_COPY : closed ? CLOSED_COPY : OPEN_COPY}
           </p>
           {!unknown && !closed && (
-            <div className="mt-2.5 max-w-sm">
+            <div className="mt-3 flex max-w-lg flex-col gap-2">
               <input
                 type="text"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Optional reason for audit log before closing..."
                 aria-label="Reason for closing rooms"
-                className="border-line-2 bg-ground text-ink placeholder:text-ink-3 focus:border-brand h-8 w-full rounded-[var(--r-ctl)] border px-2.5 text-xs focus:outline-none"
+                className="border-line-2 bg-ground text-ink placeholder:text-ink-3 focus:border-brand h-10 w-full rounded-[var(--r-ctl)] border px-3 text-base focus:outline-none sm:h-8 sm:text-xs"
               />
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-ink-3 font-mono text-[11px]">
+                  Presets:
+                </span>
+                {["Report spike", "Spam wave", "Scheduled maintenance"].map(
+                  (preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setReason(preset)}
+                      className="border-line-2 bg-panel-2 text-ink-2 hover:border-line-3 hover:text-ink cursor-pointer rounded-[var(--r-ctl)] border px-2 py-0.5 font-mono text-[11px]"
+                    >
+                      {preset}
+                    </button>
+                  ),
+                )}
+              </div>
             </div>
           )}
           {fetcher.data?.error && (

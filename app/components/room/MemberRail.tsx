@@ -25,14 +25,14 @@ export function MemberList({ members, self, onMention }: MemberListProps) {
   return (
     <>
       {members.length > 5 && (
-        <div className="px-2 pb-2">
+        <div className="px-1.5 pb-2">
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Find handle..."
             aria-label="Filter online handles"
-            className="border-line-2 bg-panel-2 text-ink placeholder:text-ink-3 focus:border-brand h-8 w-full rounded-[var(--r-ctl)] border px-2.5 font-mono text-xs focus:outline-none"
+            className="border-line-2 bg-panel-2 text-ink placeholder:text-ink-3 focus:border-brand h-10 w-full rounded-[var(--r-ctl)] border px-2.5 font-mono text-base focus:outline-none sm:h-8 sm:text-xs"
           />
         </div>
       )}
@@ -53,7 +53,7 @@ export function MemberList({ members, self, onMention }: MemberListProps) {
           >
             <i style={{ background: handleColour(who, self) }} />
             <span
-              className={mine ? undefined : "text-ink-2"}
+              className={mine ? "font-semibold" : "text-ink-2"}
               style={mine ? { color: BRAND } : undefined}
             >
               {mine ? `${who} (you)` : who}
@@ -77,10 +77,39 @@ export interface MemberRailProps {
 export function MemberRail({ members, self, onMention }: MemberRailProps) {
   return (
     <aside className="members" aria-label="Online now">
-      <div className="rail-label">
-        Online <span>{members.length}</span>
+      <div className="rail-card flex min-h-0 flex-1 flex-col">
+        <div className="rail-card-head">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="bg-ok inline-block h-1.5 w-1.5" />
+            Online
+          </span>
+          <span>{members.length}</span>
+        </div>
+        <div className="rail-card-body min-h-0 flex-1 overflow-y-auto">
+          <MemberList members={members} self={self} onMention={onMention} />
+        </div>
       </div>
-      <MemberList members={members} self={self} onMention={onMention} />
+
+      <div className="rail-card flex-none">
+        <div className="rail-card-head">
+          <span>Session</span>
+          <span>VRIP-13</span>
+        </div>
+        <div className="space-y-1.5 p-2.5 font-mono text-[11px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-ink-3">Identity</span>
+            <span className="text-ink-2">device key</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-ink-3">History</span>
+            <span className="text-ink-2">48h SQLite</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-ink-3">PII stored</span>
+            <span className="text-ok">none</span>
+          </div>
+        </div>
+      </div>
     </aside>
   );
 }

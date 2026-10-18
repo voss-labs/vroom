@@ -52,7 +52,7 @@ export const ERROR_NOTE =
   "px-3 py-2 text-[12.5px]";
 
 export const TBL_FOOT =
-  "text-ink-2 flex items-center gap-3 px-[18px] pt-[14px] pb-[18px] text-[13px]";
+  "text-ink-2 flex flex-wrap items-center justify-between gap-3 px-[14px] sm:px-[18px] pt-[14px] pb-[18px] text-[13px]";
 
 export const SORTBTN =
   "-mx-[7px] -my-2 inline-flex min-h-11 cursor-pointer items-center gap-[5px] " +

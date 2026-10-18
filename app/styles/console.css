@@ -10,7 +10,10 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding: 26px 20px 56px;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px max(20px, env(safe-area-inset-right))
+      max(68px, calc(48px + env(safe-area-inset-bottom)))
+      max(20px, env(safe-area-inset-left));
   }
   .admin-inner {
     max-width: 1060px;
@@ -259,18 +262,72 @@
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+@media (max-width: 720px) {
+  .admin {
+    padding: 16px max(12px, env(safe-area-inset-right))
+      max(72px, calc(52px + env(safe-area-inset-bottom)))
+      max(12px, env(safe-area-inset-left));
+  }
+  .admin-inner {
+    gap: 14px;
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .stat {
+    padding: 12px 14px;
+  }
+  .stat-k {
+    font-size: 12.5px;
+  }
+  .stat-v {
+    margin-top: 4px;
+    font-size: 19px;
+  }
+  .sec-head {
+    padding: 14px 14px 0;
+  }
+  .roomctl {
+    padding: 14px;
+    gap: 12px;
+  }
   .toolbar {
     flex-wrap: wrap;
+    padding: 12px 14px;
+    gap: 8px;
   }
   .inp {
+    flex: 1 1 100%;
+    width: 100%;
     max-width: none;
+  }
+  .tbl-wrap {
+    padding: 0 14px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tbl-box {
+    min-width: 0;
+  }
+  .tbl th,
+  .tbl td {
+    padding: 10px 10px;
   }
   .audit-line {
     grid-template-columns: 1fr;
     gap: 4px;
+    padding: 10px 14px;
+  }
+}
+
+@media (max-width: 380px) {
+  .stats {
+    grid-template-columns: 1fr;
   }
 }

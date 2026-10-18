@@ -175,7 +175,7 @@ export function ReportBug() {
         aria-label="Report a bug"
         title="Report a bug"
         data-testid="bug-report-trigger"
-        className="border-line-2 bg-panel-2/95 text-ink-2 hover:border-brand/50 hover:bg-raised hover:text-ink fixed right-4 bottom-4 z-40 flex h-9 items-center gap-1.5 rounded-[4px] border px-3 font-mono text-xs font-medium shadow-lg backdrop-blur transition-colors max-[1040px]:bottom-[74px]"
+        className="border-line-2 bg-panel-2/95 text-ink-2 hover:border-brand/50 hover:bg-raised hover:text-ink fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex h-9 items-center gap-1.5 rounded-[4px] border px-3 font-mono text-xs font-medium shadow-lg backdrop-blur transition-colors max-[1040px]:right-[max(0.75rem,env(safe-area-inset-right))] max-[1040px]:bottom-[calc(68px+env(safe-area-inset-bottom))]"
       >
         <Bug className="text-brand size-3.5" />
         <span className="max-[480px]:sr-only">Bug</span>
@@ -187,10 +187,13 @@ export function ReportBug() {
         onClick={(e) => {
           if (e.target === dialogRef.current) closeModal();
         }}
-        className="border-line-2 bg-panel text-ink m-auto w-[calc(100%-1.5rem)] max-w-lg rounded-[4px] border p-0 shadow-2xl backdrop:bg-black/75 backdrop:backdrop-blur-[2px]"
+        className="border-line-2 bg-panel text-ink m-auto max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-lg overflow-y-auto rounded-[4px] border p-0 shadow-2xl backdrop:bg-black/75 backdrop:backdrop-blur-[2px]"
       >
         {open && (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-4 p-4 sm:p-5"
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -225,7 +228,7 @@ export function ReportBug() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What were you doing, what did you expect, and what happened instead?"
-                className="border-line-2 bg-ground focus:border-brand text-ink placeholder:text-ink-3 w-full resize-y rounded-[4px] border px-3 py-2 text-sm leading-relaxed focus:outline-none"
+                className="border-line-2 bg-ground focus:border-brand text-ink placeholder:text-ink-3 w-full resize-y rounded-[4px] border px-3 py-2 text-base leading-relaxed focus:outline-none sm:text-sm"
               />
               {description.length >= MAX_DESCRIPTION * 0.8 && (
                 <span className="text-ink-3 self-end font-mono text-[11px] tabular-nums">
@@ -363,13 +366,17 @@ export function ReportBug() {
             )}
 
             <div className="border-line flex items-center justify-end gap-2 border-t pt-3">
-              <button type="button" onClick={closeModal} className="btn btn-sm">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="btn btn-sm max-[640px]:min-h-10 max-[640px]:px-3.5"
+              >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={!description.trim() || state.kind === "sending"}
-                className="btn btn-primary btn-sm"
+                className="btn btn-primary btn-sm max-[640px]:min-h-10 max-[640px]:px-3.5"
               >
                 {state.kind === "sending" ? "Sending..." : "Send report"}
               </button>

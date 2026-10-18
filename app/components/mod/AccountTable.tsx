@@ -150,7 +150,11 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
   }
 
   return (
-    <section className="sec">
+    <section className="sec overflow-hidden">
+      <div className="rail-card-head px-4 py-2.5">
+        <span>Identity Registry · Device Keys</span>
+        <span>{accounts.length} handles</span>
+      </div>
       <div className="sec-head">
         <h2>Accounts</h2>
         <p>
@@ -262,7 +266,7 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
                   </button>
                 </th>
                 {!hidden.has("messages") && (
-                  <th>
+                  <th className="max-[540px]:hidden">
                     <button
                       type="button"
                       className={SORTBTN}
@@ -315,7 +319,7 @@ export function AccountTable({ accounts, counts }: AccountTableProps) {
                       )}
                     </td>
                     {!hidden.has("messages") && (
-                      <td className="font-mono tabular-nums">
+                      <td className="font-mono tabular-nums max-[540px]:hidden">
                         {messages === null ? (
                           <>
                             <span aria-hidden="true">—</span>

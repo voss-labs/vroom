@@ -23,6 +23,7 @@ import {
   elide,
   normalise,
   normaliseWord,
+  phoneticWord,
   tokenize,
   type Token,
 } from "./policy-normalise";
@@ -122,6 +123,12 @@ const UNELIDED: ReadonlySet<Category> = new Set(["threat", "selfharm"]);
 const TERM_INDEX = new Map<string, Term[]>();
 function indexTerm(parts: string[], category: Category): void {
   const bucket = TERM_INDEX.get(parts[0]) ?? [];
+  const key = parts.join(" ");
+  if (
+    bucket.some((t) => t.category === category && t.parts.join(" ") === key)
+  ) {
+    return;
+  }
   bucket.push({ parts, category });
   TERM_INDEX.set(parts[0], bucket);
 }
@@ -130,6 +137,11 @@ for (const [category, words] of Object.entries(TERMS)) {
     const parts = normalise(word).split(" ").filter(Boolean);
     if (!parts.length) continue;
     indexTerm(parts, category as Category);
+
+    const phon = parts.map(phoneticWord);
+    if (phon.some((part, i) => part !== parts[i])) {
+      indexTerm(phon, category as Category);
+    }
 
     const skeleton = parts.map(elide);
     const changed = skeleton.some((part, i) => part !== parts[i]);
@@ -144,12 +156,14 @@ for (const [category, words] of Object.entries(TERMS)) {
   }
 }
 
-const GUARD_INDEX = new Map<string, Set<string>>(
-  Object.entries(GUARDS).map(([term, words]) => [
-    normalise(term),
-    new Set(words.map((w) => normalise(w))),
-  ]),
-);
+const GUARD_INDEX = new Map<string, Set<string>>();
+for (const [term, words] of Object.entries(GUARDS)) {
+  const guardSet = new Set(words.map((w) => normalise(w)));
+  const normKey = normalise(term);
+  GUARD_INDEX.set(normKey, guardSet);
+  const phonKey = normKey.split(" ").map(phoneticWord).join(" ");
+  if (phonKey !== normKey) GUARD_INDEX.set(phonKey, guardSet);
+}
 
 const HANDLE_ADJECTIVES = new Set([...ADJECTIVE_SET].map(normaliseWord));
 const HANDLE_ANIMALS = new Set([...ANIMAL_SET].map(normaliseWord));
@@ -182,15 +196,29 @@ interface Hit extends Span {
   category?: Category;
 }
 
-/** A masked word is also looked up by its skeleton (VRIP-14). */
+/**
+ * A token is looked up by its normalised form, its phonetic canonical form
+ * (Hinglish/Marathi equivalences), and, when masked, its vowel-elided skeleton.
+ */
 function candidates(token: Token): Term[] {
-  const direct = TERM_INDEX.get(token.norm) ?? [];
-  if (!token.skeleton || token.skeleton === token.norm) return direct;
-  return [...direct, ...(TERM_INDEX.get(token.skeleton) ?? [])];
+  const out: Term[] = [...(TERM_INDEX.get(token.norm) ?? [])];
+  if (token.phonetic && token.phonetic !== token.norm) {
+    out.push(...(TERM_INDEX.get(token.phonetic) ?? []));
+  }
+  if (
+    token.skeleton &&
+    token.skeleton !== token.norm &&
+    token.skeleton !== token.phonetic
+  ) {
+    out.push(...(TERM_INDEX.get(token.skeleton) ?? []));
+  }
+  return out;
 }
 
 function matchesPart(token: Token, part: string): boolean {
-  return token.norm === part || token.skeleton === part;
+  return (
+    token.norm === part || token.phonetic === part || token.skeleton === part
+  );
 }
 
 function findTerms(tokens: Token[]): Hit[] {

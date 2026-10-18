@@ -12,6 +12,12 @@ import { CONFUSABLES, DEVANAGARI, MASKS } from "./policy-chars";
 export interface Token {
   norm: string;
   /**
+   * Canonical Hinglish/Marathi phonetic form (`bh`->`b`, `ph`->`f`, `w`->`v`,
+   * `z`->`j`, `au`/`ow`->`av`, etc.) so spelling variations across Hindi and
+   * Marathi transliterations match without inflating the wordlist.
+   */
+  phonetic?: string;
+  /**
    * A masked word's vowel-dropped form, also compared against the wordlists.
    * `ch*tiya` is missing a letter no mapping can restore (VRIP-14).
    */
@@ -24,16 +30,27 @@ const WORD_CHAR = /[\p{L}\p{N}\p{M}]/u;
 /** Zero-width characters sit inside a word rather than splitting it. */
 const INVISIBLE = /\p{Cf}/u;
 /** Part of a word only between two word characters: `f*ck`, never `**bold**`. */
-const MASK_CHAR = /[*@$!]/;
-const MASKED = /[\d*@$!]/;
+const MASK_CHAR = /[*@$!#_%^]/;
+const MASKED = /[\d*@$!#_%^]/;
 const LETTER = /\p{L}/u;
 const COMBINING = /\p{M}/gu;
 const SINGLE_LETTER = /^[a-z]$/;
 const REPEAT = /(.)\1+/g;
+const NUKTA_PAIRS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/क़/g, "k"],
+  [/ख़/g, "kh"],
+  [/ग़/g, "g"],
+  [/ज़/g, "z"],
+  [/ड़/g, "r"],
+  [/ढ़/g, "rh"],
+  [/फ़/g, "f"],
+];
 
 function mapChars(raw: string, table: Record<string, string>): string {
+  let pre = raw;
+  for (const [re, rep] of NUKTA_PAIRS) pre = pre.replace(re, rep);
   let out = "";
-  for (const ch of raw) out += table[ch] ?? ch;
+  for (const ch of pre) out += table[ch] ?? ch;
   return out;
 }
 
@@ -58,6 +75,31 @@ export function normaliseWord(raw: string): string {
 }
 
 /**
+ * Folds Hinglish and Marathi transliteration equivalences (`w`/`v`/`au` in
+ * `lawda`/`lavda`/`lauda`, `z`/`j`/`zh` in `zavadya`/`jhavadya`/`javadya`,
+ * `ph`/`f` in `phuddi`/`fuddi`, and aspirated consonants `bh`/`dh`/`th`/`kh`/`gh`)
+ * into a single canonical key. Applied only to tokens of length >= 4 so short
+ * English words and abbreviations never collide.
+ */
+export function phoneticWord(norm: string): string {
+  if (norm.length < 4) return norm;
+  return norm
+    .replace(/ph/g, "f")
+    .replace(/bh/g, "b")
+    .replace(/dh/g, "d")
+    .replace(/th/g, "t")
+    .replace(/kh/g, "k")
+    .replace(/gh/g, "g")
+    .replace(/sh/g, "s")
+    .replace(/zh/g, "j")
+    .replace(/z/g, "j")
+    .replace(/w/g, "v")
+    .replace(/au/g, "av")
+    .replace(/ow/g, "av")
+    .replace(REPEAT, "$1");
+}
+
+/**
  * Dropping the vowels is the other one-keystroke evasion: `fck` for `fuck`,
  * `bhnchd` for `bhenchod`. A leading vowel is kept.
  */
@@ -77,13 +119,23 @@ function inWord(text: string, i: number, ch: string): boolean {
   return near(text[i - 1]) && near(text[i + 1]);
 }
 
+function buildToken(
+  norm: string,
+  masked: boolean,
+  start: number,
+  end: number,
+): Token {
+  const phon = phoneticWord(norm);
+  const phonetic = phon !== norm ? phon : undefined;
+  const skeleton = masked ? elide(norm) : undefined;
+  return { norm, phonetic, skeleton, start, end };
+}
+
 function wordToken(raw: string, start: number, end: number): Token | null {
   const masked = LETTER.test(raw) && MASKED.test(raw);
   const norm = normaliseWord(masked ? mapChars(raw, MASKS) : raw);
   if (!norm) return null;
-  return masked
-    ? { norm, skeleton: elide(norm), start, end }
-    : { norm, start, end };
+  return buildToken(norm, masked, start, end);
 }
 
 /**
@@ -121,11 +173,8 @@ function mergeInitials(tokens: Token[]): Token[] {
     if (j - i >= 2) {
       let joined = "";
       for (let k = i; k < j; k++) joined += tokens[k].norm;
-      out.push({
-        norm: normaliseWord(joined),
-        start: tokens[i].start,
-        end: tokens[j - 1].end,
-      });
+      const norm = normaliseWord(joined);
+      out.push(buildToken(norm, false, tokens[i].start, tokens[j - 1].end));
       i = j;
     } else {
       out.push(tokens[i]);

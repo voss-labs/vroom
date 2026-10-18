@@ -128,3 +128,75 @@ describe("what VRIP-14 must leave alone", () => {
     expect(tier("bc @quiet-ibex is at it again")).toBe("block");
   });
 });
+
+describe("Hindi, Marathi, and English filter robustness", () => {
+  it("blocks Marathi profanity in Roman (Minglish) and Devanagari", () => {
+    for (const phrase of [
+      "tu zavadya aahes ka",
+      "zawadya kuthe challas",
+      "javadya gapp bas",
+      "aai ghalya abhyas kar",
+      "aaighalya",
+      "aaicha gho",
+      "bhikarchot",
+      "shindal",
+      "sindal",
+      "झवाड्या",
+      "आईझवाड्या",
+      "आईघाल्या",
+      "भिकारचोट",
+      "शिंदळ",
+    ]) {
+      expect(tier(phrase)).toBe("block");
+    }
+  });
+
+  it("blocks Marathi threats and self-harm incitement", () => {
+    expect(tier("tula marun takin bhet baher")).toBe("block");
+    expect(tier("तुला मारून टाकीन")).toBe("block");
+    expect(tier("jaun jiv de")).toBe("block");
+    expect(tier("जीव दे")).toBe("block");
+  });
+
+  it("blocks Hindi profanity across phonetic transliteration variants", () => {
+    for (const phrase of [
+      "bosdike kya bol raha hai",
+      "madharchod",
+      "bhadwa hai wo",
+      "bhadva",
+      "lavda lasun",
+      "lawda",
+      "lauda",
+      "phuddi",
+      "fuddi",
+      "haramzada",
+      "haramjade",
+      "tmkc",
+      "teri maa ki",
+      "माँ चुदा",
+      "भड़वा",
+      "भोसड़ीके",
+    ]) {
+      expect(tier(phrase)).toBe("block");
+    }
+  });
+
+  it("blocks additional symbol masks (#, _, %, ^) inside words", () => {
+    for (const phrase of [
+      "f#ck this",
+      "f_ck off",
+      "ch#tiya",
+      "ch_tiya",
+      "bh*sdike",
+      "m@darch0d",
+    ]) {
+      expect(tier(phrase)).toBe("block");
+    }
+  });
+
+  it("guards benign campus uses of chakka jam and hashtags", () => {
+    expect(tier("main road pe chakka jam hai")).toBe("none");
+    expect(tier("bus ka chakka puncture ho gaya")).toBe("none");
+    expect(tier("#placements update for 2026 batch")).toBe("none");
+  });
+});

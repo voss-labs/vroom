@@ -16,9 +16,9 @@ const SHEET_CSS = `
   inset: 0;
   width: 100%;
   max-width: 100%;
-  max-height: 82dvh;
+  max-height: 86dvh;
   margin: auto 0 0;
-  padding: 0;
+  padding: 0 0 env(safe-area-inset-bottom);
   flex-direction: column;
   color: var(--color-ink);
   background: var(--color-panel);
