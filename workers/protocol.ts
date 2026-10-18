@@ -34,6 +34,14 @@ export interface Msg extends EphemeralMsg {
  */
 export const EPHEMERAL_TTL_MS = 60_000;
 
+/**
+ * How long a stored message lives in the room and in the Durable Object SQLite
+ * database before it disappears and is hard-deleted (VRIP-15). Forty-eight
+ * hours keeps yesterday and today in scrollback without turning a campus room
+ * into a permanent archive.
+ */
+export const MESSAGE_TTL_MS = 48 * 60 * 60_000;
+
 export type SystemTone = "join" | "warn" | "dead";
 
 /**

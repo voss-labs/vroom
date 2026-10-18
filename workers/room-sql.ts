@@ -6,9 +6,9 @@
  * exists alongside the public `id`.
  */
 
-import type { DeletedBy, Msg } from "./protocol";
+import { MESSAGE_TTL_MS, type DeletedBy, type Msg } from "./protocol";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * A type alias rather than an interface on purpose: `sql.exec<T>` constrains T
@@ -52,6 +52,9 @@ export function ensureSchema(sql: SqlStorage): void {
     `CREATE INDEX IF NOT EXISTS idx_messages_pseudonym ON messages(pseudonym);`,
   );
   sql.exec(
+    `CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);`,
+  );
+  sql.exec(
     `CREATE TABLE IF NOT EXISTS room_state (k TEXT PRIMARY KEY, v TEXT NOT NULL);`,
   );
   sql.exec(
@@ -72,11 +75,8 @@ export function ensureSchema(sql: SqlStorage): void {
 }
 
 /**
- * VRIP-11 on a table that already exists in production. `CREATE TABLE IF NOT
- * EXISTS` above only describes a fresh object, so the live room needs the
- * column added and its history told the truth: every deletion that happened
- * before this shipped was a moderator's, because withdrawal did not exist. The
- * backfill runs once, inside the same branch as the ALTER.
+ * VRIP-11 on a table that already exists in production: adds `deleted_by` and
+ * backfills pre-existing moderator deletions once.
  */
 function addDeletedBy(sql: SqlStorage): void {
   const columns = sql
@@ -135,6 +135,26 @@ export function writeRoomState(
 
 /* ---------------- messages ---------------- */
 
+/** Hard-deletes every message whose 48-hour window has elapsed (VRIP-15). */
+export function pruneExpiredMessages(
+  sql: SqlStorage,
+  now = Date.now(),
+): number {
+  const cutoff = now - MESSAGE_TTL_MS;
+  sql.exec(`DELETE FROM messages WHERE created_at <= ?`, cutoff);
+  return sql.exec<{ n: number }>(`SELECT changes() AS n`).one().n;
+}
+
+/** Epoch ms when the oldest remaining row in `messages` expires, or null. */
+export function nextExpiryAt(sql: SqlStorage): number | null {
+  const row = sql
+    .exec<{ oldest: number | null }>(
+      `SELECT MIN(created_at) AS oldest FROM messages`,
+    )
+    .one();
+  return row.oldest === null ? null : row.oldest + MESSAGE_TTL_MS;
+}
+
 export function insertMessage(
   sql: SqlStorage,
   msg: { id: string; pseudonym: string; body: string; createdAt: number },
@@ -157,15 +177,18 @@ export function insertMessage(
   };
 }
 
-/** Newest `limit` messages, returned oldest-first for direct rendering. */
+/** Newest `limit` messages within the 48-hour window, returned oldest-first. */
 export function recentMessages(
   sql: SqlStorage,
   limit: number,
+  now = Date.now(),
 ): { messages: Msg[]; hasMore: boolean } {
+  const cutoff = now - MESSAGE_TTL_MS;
   const rows = sql
     .exec<MessageRow>(
       `SELECT seq, id, pseudonym, body, created_at, deleted_at, deleted_by FROM messages
-       WHERE deleted_at IS NULL ORDER BY seq DESC LIMIT ?`,
+       WHERE deleted_at IS NULL AND created_at > ? ORDER BY seq DESC LIMIT ?`,
+      cutoff,
       limit + 1,
     )
     .toArray();
@@ -173,17 +196,20 @@ export function recentMessages(
   return { messages: rows.slice(0, limit).reverse().map(toMsg), hasMore };
 }
 
-/** One page older than `before`, oldest-first. */
+/** One page older than `before` within the 48-hour window, oldest-first. */
 export function messagesBefore(
   sql: SqlStorage,
   before: number,
   limit: number,
+  now = Date.now(),
 ): { messages: Msg[]; hasMore: boolean } {
+  const cutoff = now - MESSAGE_TTL_MS;
   const rows = sql
     .exec<MessageRow>(
       `SELECT seq, id, pseudonym, body, created_at, deleted_at, deleted_by FROM messages
-       WHERE seq < ? AND deleted_at IS NULL ORDER BY seq DESC LIMIT ?`,
+       WHERE seq < ? AND deleted_at IS NULL AND created_at > ? ORDER BY seq DESC LIMIT ?`,
       before,
+      cutoff,
       limit + 1,
     )
     .toArray();
@@ -191,30 +217,26 @@ export function messagesBefore(
   return { messages: rows.slice(0, limit).reverse().map(toMsg), hasMore };
 }
 
-export function findMessage(sql: SqlStorage, id: string): Msg | null {
+export function findMessage(
+  sql: SqlStorage,
+  id: string,
+  now = Date.now(),
+): Msg | null {
+  const cutoff = now - MESSAGE_TTL_MS;
   const rows = sql
     .exec<MessageRow>(
-      `SELECT seq, id, pseudonym, body, created_at, deleted_at, deleted_by FROM messages WHERE id = ?`,
+      `SELECT seq, id, pseudonym, body, created_at, deleted_at, deleted_by FROM messages
+       WHERE id = ? AND created_at > ?`,
       id,
+      cutoff,
     )
     .toArray();
   return rows.length ? toMsg(rows[0]) : null;
 }
 
 /**
- * Soft delete, never a hard one: the row survives so a moderator can still read
- * what was said. Returns false when nothing changed — an unknown id, or a
- * deletion this call cannot make more true than it already is.
- *
- * The two actors are not symmetric (VRIP-11). A moderator deleting a message
- * the author already withdrew still records the moderator action, because the
- * row is the only place that fact lives inside the object; an author
- * withdrawing a message a moderator already removed changes nothing, or the
- * record would start describing a moderator's deletion as the author's.
- *
- * `deleted_at` is preserved by the moderator branch on purpose: it is when the
- * message left the room, which the withdrawal decided. When the moderator
- * acted is in the Neon audit row.
+ * Soft delete within the active window (VRIP-11): moderator removal overrides
+ * author withdrawal, while author withdrawal never overwrites a moderator removal.
  */
 export function softDeleteMessage(
   sql: SqlStorage,
@@ -279,10 +301,7 @@ export interface RateVerdict {
   retryAfter: number;
 }
 
-/**
- * Fixed-window counter keyed on the pseudonym, so two tabs share one budget.
- * The object is single-threaded, so this read-check-write needs no locking.
- */
+/** Fixed-window counter keyed on the pseudonym, so two tabs share one budget. */
 export function checkRate(
   sql: SqlStorage,
   pseudonym: string,
@@ -326,19 +345,28 @@ export interface MessageStats {
   since: number | null;
 }
 
-export function messageStats(sql: SqlStorage): MessageStats {
+export function messageStats(sql: SqlStorage, now = Date.now()): MessageStats {
+  const cutoff = now - MESSAGE_TTL_MS;
   const row = sql
     .exec<{ total: number; since: number | null }>(
-      `SELECT COUNT(*) AS total, MIN(created_at) AS since FROM messages WHERE deleted_at IS NULL`,
+      `SELECT COUNT(*) AS total, MIN(created_at) AS since FROM messages
+       WHERE deleted_at IS NULL AND created_at > ?`,
+      cutoff,
     )
     .one();
   return { total: row.total, since: row.since };
 }
 
-export function countsByPseudonym(sql: SqlStorage): Record<string, number> {
+export function countsByPseudonym(
+  sql: SqlStorage,
+  now = Date.now(),
+): Record<string, number> {
+  const cutoff = now - MESSAGE_TTL_MS;
   const rows = sql
     .exec<{ pseudonym: string; n: number }>(
-      `SELECT pseudonym, COUNT(*) AS n FROM messages WHERE deleted_at IS NULL GROUP BY pseudonym`,
+      `SELECT pseudonym, COUNT(*) AS n FROM messages
+       WHERE deleted_at IS NULL AND created_at > ? GROUP BY pseudonym`,
+      cutoff,
     )
     .toArray();
   const out: Record<string, number> = {};
