@@ -83,7 +83,6 @@ export function RoomLinks({
   return (
     <>
       {ROOM_IDS.map((id) => {
-        const meta = ROOMS[id];
         const isCurrent = id === active;
         const count = isCurrent
           ? (liveOnline ?? pulses?.[id]?.online ?? 0)
@@ -97,20 +96,17 @@ export function RoomLinks({
             onClick={onNavigate}
           >
             <span className="rail-hash">#</span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate">{id}</span>
-                {count > 0 && (
-                  <span className="text-ok flex shrink-0 items-center gap-1 font-mono text-[11px] font-normal tabular-nums">
-                    <span className="bg-ok inline-block h-1.5 w-1.5" />
-                    {count}
-                  </span>
-                )}
-              </div>
-              <div className="text-ink-3 truncate font-sans text-[11px] font-normal">
-                {meta.subtitle}
-              </div>
-            </div>
+            <span className="min-w-0 flex-1 truncate">{id}</span>
+            {count > 0 ? (
+              <span className="border-line-2 bg-panel text-ok inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-sm)] border px-1.5 py-0.5 font-mono text-[10.5px] font-medium tabular-nums">
+                <span className="bg-ok inline-block h-1.5 w-1.5" />
+                {count}
+              </span>
+            ) : (
+              <span className="text-ink-3 shrink-0 font-mono text-[10.5px] tabular-nums">
+                —
+              </span>
+            )}
           </Link>
         );
       })}
@@ -135,13 +131,40 @@ export function RoomRail({
   pulses,
   liveOnline,
 }: RoomRailProps) {
+  const currentRoom = ROOMS[active];
+
   return (
     <nav className="rail" aria-label="Rooms">
       <div className="rail-scroll">
-        <div className="rail-label">
-          Rooms <span>{ROOM_IDS.length}</span>
+        <div className="rail-card">
+          <div className="rail-card-head">
+            <span>Rooms</span>
+            <span>{ROOM_IDS.length} channels</span>
+          </div>
+          <div className="rail-card-body">
+            <RoomLinks
+              active={active}
+              pulses={pulses}
+              liveOnline={liveOnline}
+            />
+          </div>
         </div>
-        <RoomLinks active={active} pulses={pulses} liveOnline={liveOnline} />
+
+        <div className="rail-card">
+          <div className="rail-card-head">
+            <span>Active Room</span>
+            <span className="text-brand">#{currentRoom.id}</span>
+          </div>
+          <div className="space-y-2 p-2.5 text-[12px]">
+            <p className="text-ink-2 m-0 leading-relaxed">
+              {currentRoom.subtitle}
+            </p>
+            <div className="border-line text-ink-3 flex items-center justify-between border-t pt-2 font-mono text-[11px]">
+              <span>Retention</span>
+              <span className="text-ink-2">48h auto-purge</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <HandlePanel

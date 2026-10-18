@@ -56,7 +56,7 @@ function Row({
     >
       {blocked ? (
         <span className="row-handle">blocked:</span>
-      ) : onMention ? (
+      ) : onMention && !mine ? (
         <button
           type="button"
           className="row-handle cursor-pointer border-0 bg-transparent p-0 text-left hover:underline"
@@ -79,17 +79,6 @@ function Row({
 
       {actionable ? (
         <div className="row-act">
-          {onMention ? (
-            <button
-              type="button"
-              className="row-btn"
-              aria-label={`Reply to ${msg.who}`}
-              title={`Mention @${msg.who} in composer`}
-              onClick={() => onMention(msg.who)}
-            >
-              reply
-            </button>
-          ) : null}
           <button
             type="button"
             className="row-btn disabled:cursor-default disabled:opacity-60"

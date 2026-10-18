@@ -11,17 +11,17 @@ export function cn(...inputs: ClassValue[]) {
  * means "you", muted red means "bad" (VRIP-05, after vask's style.go).
  */
 const PALETTE = [
-  "#5cb88a",
-  "#4fa9a6",
-  "#5f9fd0",
-  "#8093dd",
-  "#a98ad4",
-  "#c98ac0",
-  "#cfa04e",
-  "#8fb45f",
+  "var(--handle-0, #5cb88a)",
+  "var(--handle-1, #4fa9a6)",
+  "var(--handle-2, #5f9fd0)",
+  "var(--handle-3, #8093dd)",
+  "var(--handle-4, #a98ad4)",
+  "var(--handle-5, #c98ac0)",
+  "var(--handle-6, #cfa04e)",
+  "var(--handle-7, #8fb45f)",
 ] as const;
 
-export const BRAND = "#fb7a3c";
+export const BRAND = "var(--color-brand, #fb7a3c)";
 
 export function handleColour(handle: string, self?: string): string {
   if (self && handle === self) return BRAND;

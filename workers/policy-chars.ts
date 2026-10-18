@@ -38,9 +38,10 @@ export const CONFUSABLES: Record<string, string> = {
 };
 
 /**
- * What a masked word means by its digits and symbols (VRIP-14). `*` maps to
- * nothing: it hides a letter rather than standing in for one, which is why a
- * masked word is also compared by its vowel-dropped skeleton.
+ * What a masked word means by its digits and symbols (VRIP-14). `*`, `#`, `_`,
+ * `%`, and `^` map to nothing when used inside a word: they hide a letter
+ * rather than standing in for one, which is why a masked word is also compared
+ * by its vowel-dropped skeleton.
  */
 export const MASKS: Record<string, string> = {
   "0": "o",
@@ -49,16 +50,22 @@ export const MASKS: Record<string, string> = {
   "4": "a",
   "5": "s",
   "7": "t",
+  "8": "b",
   "@": "a",
   $: "s",
   "!": "i",
   "*": "",
+  "#": "",
+  _: "",
+  "%": "",
+  "^": "",
 };
 
 /**
  * Deterministic, not faithful. Inherent vowels are dropped, so `म क च` folds to
  * `mkc` — which is the abbreviation students actually type — while a whole word
  * folds to a stable string that its Devanagari entry in TERMS folds to as well.
+ * Includes Marathi `ळ`, candra vowels (`ॲ`, `ऑ`), and precomposed nukta letters.
  */
 export const DEVANAGARI: Record<string, string> = {
   अ: "a",
@@ -72,6 +79,9 @@ export const DEVANAGARI: Record<string, string> = {
   ऐ: "ai",
   ओ: "o",
   औ: "au",
+  ॲ: "a",
+  ऍ: "e",
+  ऑ: "o",
   "ा": "a",
   "ि": "i",
   "ी": "i",
@@ -123,13 +133,14 @@ export const DEVANAGARI: Record<string, string> = {
   स: "s",
   ह: "h",
   ळ: "l",
-  क़: "k",
-  ख़: "kh",
-  ग़: "g",
-  ज़: "z",
-  ड़: "r",
-  ढ़: "rh",
-  फ़: "f",
+  "\u0958": "k",
+  "\u0959": "kh",
+  "\u095a": "g",
+  "\u095b": "z",
+  "\u095c": "r",
+  "\u095d": "rh",
+  "\u095e": "f",
+  "\u095f": "y",
   "०": "0",
   "१": "1",
   "२": "2",

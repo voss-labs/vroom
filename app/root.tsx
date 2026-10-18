@@ -18,10 +18,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="color-scheme" content="dark" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+        <meta name="color-scheme" content="dark light" />
         {/* A pseudonymous student room has nothing to gain from being indexed. */}
         <meta name="robots" content="noindex" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("vrooms-theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}}catch(e){}`,
+          }}
+        />
         <Meta />
         <Links />
       </head>
@@ -56,15 +64,15 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[480px] flex-col justify-center px-5">
+    <main className="mx-auto flex min-h-dvh max-w-[480px] flex-col justify-center px-5 py-10">
       <div className="wordmark mb-8">
         <i />V ROOMS
       </div>
       <h1 className="text-2xl font-semibold tracking-tight">{heading}</h1>
       <p className="text-ink-2 mt-2 text-sm leading-relaxed">{detail}</p>
-      <div className="mt-6 flex items-center gap-4">
+      <div className="mt-6 flex flex-wrap items-center gap-4">
         <a
-          className="text-ink inline-block text-sm underline underline-offset-4"
+          className="text-ink inline-flex min-h-11 items-center text-sm underline underline-offset-4"
           href="/"
         >
           Back to the start
@@ -72,7 +80,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         <button
           type="button"
           onClick={() => openBugReport(`${heading}: ${detail}`)}
-          className="border-line-2 text-ink-2 hover:bg-bg-2 hover:text-ink rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
+          className="border-line-2 text-ink-2 hover:bg-bg-2 hover:text-ink inline-flex min-h-11 items-center rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
         >
           Report this error
         </button>
