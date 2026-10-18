@@ -9,7 +9,8 @@ import {
   enterWithDeviceKey,
 } from "~/lib/device-key.client";
 import { resolveActor } from "~/lib/require-role.server";
-import { ROOM_IDS, ROOMS } from "~/lib/rooms";
+import { readRoomPulses, type RoomPulse } from "~/lib/room.server";
+import { DEFAULT_ROOM_ID, ROOM_IDS, ROOMS, type RoomId } from "~/lib/rooms";
 import { isVAuthSignInOpen } from "~/lib/sign-in.server";
 
 export function meta() {
@@ -26,18 +27,36 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const actor = await resolveActor(request);
   if (actor) throw redirect("/room");
+  const pulses = await readRoomPulses();
   // Only moderators use V Auth since VRIP-13, so the pause hides their link alone.
-  return { moderatorSignInOpen: isVAuthSignInOpen() };
+  return {
+    moderatorSignInOpen: isVAuthSignInOpen(),
+    pulses,
+  };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
+  const [targetRoom, setTargetRoom] = useState<RoomId>(DEFAULT_ROOM_ID);
+  const pulses = loaderData.pulses;
+  const totalOnline = pulses
+    ? Object.values(pulses).reduce((sum, p) => sum + p.online, 0)
+    : null;
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[600px] flex-col justify-center px-5 py-14">
-      <div className="mb-8 flex items-center justify-between">
+    <main className="mx-auto flex min-h-dvh max-w-[620px] flex-col justify-center px-5 py-14">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-2">
         <div className="wordmark">
           <i />V ROOMS <small>voss labs</small>
         </div>
-        <span className="tag">48h disappearing window</span>
+        <div className="flex items-center gap-2">
+          {totalOnline !== null && totalOnline > 0 && (
+            <span className="tag tag-live">
+              <span className="mark" />
+              {totalOnline} active now
+            </span>
+          )}
+          <span className="tag">48h disappearing window</span>
+        </div>
       </div>
 
       <h1 className="mb-3 text-[28px] leading-tight font-semibold tracking-tight text-balance">
@@ -50,9 +69,59 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         handle and keep it on this device.
       </p>
 
-      <EnterButton />
+      <EnterButton targetRoom={targetRoom} />
 
-      <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="border-line-2 bg-panel mt-6 rounded-[var(--r-card)] border p-4">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h2 className="text-ink-3 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase">
+            Pick a Room to Enter
+          </h2>
+          <span className="text-ink-3 font-mono text-[11px]">
+            switch anytime inside
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {ROOM_IDS.map((id) => {
+            const r = ROOMS[id];
+            const pulse: RoomPulse | undefined = pulses?.[id];
+            const selected = targetRoom === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTargetRoom(id)}
+                aria-pressed={selected}
+                className={`flex cursor-pointer flex-col gap-1 rounded-[var(--r-ctl)] border px-3 py-2.5 text-left transition-colors ${
+                  selected
+                    ? "border-brand bg-raised-2 text-ink"
+                    : "border-line bg-panel-2 hover:border-line-3 hover:bg-raised text-ink-2"
+                }`}
+              >
+                <div className="flex w-full items-center justify-between gap-2">
+                  <span className="text-ink font-mono text-[13px] font-semibold">
+                    <span className="text-brand">#</span>
+                    {r.id}
+                  </span>
+                  {pulse && (
+                    <span className="text-ink-3 font-mono text-[11px] tabular-nums">
+                      {pulse.online > 0
+                        ? `${pulse.online} online`
+                        : pulse.messages > 0
+                          ? `${pulse.messages} msgs`
+                          : "quiet"}
+                    </span>
+                  )}
+                </div>
+                <span className="text-ink-3 truncate text-[12px]">
+                  {r.subtitle}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* VRIP-13 requires this to be stated plainly, in the product, before anyone enters. */}
         <div className="border-line-2 bg-panel rounded-[var(--r-card)] border p-4">
           <h2 className="mb-1.5 text-[13.5px] font-semibold">
@@ -86,36 +155,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
 
-      <div className="border-line-2 bg-panel mt-3 rounded-[var(--r-card)] border p-4">
-        <div className="mb-2.5 flex items-center justify-between">
-          <h2 className="text-ink-3 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase">
-            5 Live Campus Rooms
-          </h2>
-          <span className="text-ink-3 font-mono text-[11px]">
-            instant switch inside
-          </span>
-        </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {ROOM_IDS.map((id) => {
-            const r = ROOMS[id];
-            return (
-              <div
-                key={id}
-                className="border-line bg-panel-2 flex items-baseline gap-2 rounded-[var(--r-ctl)] border px-3 py-2"
-              >
-                <span className="text-ink font-mono text-[13px] font-semibold">
-                  <span className="text-brand">#</span>
-                  {r.id}
-                </span>
-                <span className="text-ink-3 truncate text-[12px]">
-                  {r.subtitle}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
         <p className="text-ink-3 text-[12.5px]">
           Built by{" "}
@@ -141,7 +180,7 @@ function enterError(error: unknown): string {
   return "Could not reach V Rooms. Check your connection and try again.";
 }
 
-function EnterButton() {
+function EnterButton({ targetRoom }: { targetRoom: RoomId }) {
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,7 +190,9 @@ function EnterButton() {
     setError(null);
     try {
       await enterWithDeviceKey();
-      navigate("/room");
+      navigate(
+        targetRoom === DEFAULT_ROOM_ID ? "/room" : `/room/${targetRoom}`,
+      );
     } catch (failure) {
       setError(enterError(failure));
       setPending(false);
@@ -166,7 +207,11 @@ function EnterButton() {
         onClick={enter}
         disabled={pending}
       >
-        {pending ? "Entering..." : "Enter anonymously"}
+        {pending
+          ? `Entering #${targetRoom}...`
+          : targetRoom === DEFAULT_ROOM_ID
+            ? "Enter anonymously"
+            : `Enter #${targetRoom} anonymously`}
       </button>
       {error && (
         <p role="alert" className="text-neg mt-3 text-[13px]">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 
+import type { RoomPulse } from "~/lib/room.server";
 import { ROOM_IDS, ROOMS, type RoomId } from "~/lib/rooms";
 import { cn } from "~/lib/utils";
 
@@ -67,26 +68,45 @@ export function HandlePanel({
 
 export interface RoomLinksProps {
   active: RoomId;
+  pulses?: Record<RoomId, RoomPulse> | null;
+  liveOnline?: number;
   onNavigate?: () => void;
 }
 
 /** The room list, in the rail on wide screens and in the sheet on a phone. */
-export function RoomLinks({ active, onNavigate }: RoomLinksProps) {
+export function RoomLinks({
+  active,
+  pulses,
+  liveOnline,
+  onNavigate,
+}: RoomLinksProps) {
   return (
     <>
       {ROOM_IDS.map((id) => {
         const meta = ROOMS[id];
+        const isCurrent = id === active;
+        const count = isCurrent
+          ? (liveOnline ?? pulses?.[id]?.online ?? 0)
+          : (pulses?.[id]?.online ?? 0);
         return (
           <Link
             key={id}
             to={`/room/${id}`}
-            className={cn("rail-item", id === active && "active")}
-            aria-current={id === active ? "page" : undefined}
+            className={cn("rail-item", isCurrent && "active")}
+            aria-current={isCurrent ? "page" : undefined}
             onClick={onNavigate}
           >
             <span className="rail-hash">#</span>
             <div className="min-w-0 flex-1">
-              <div className="truncate">{id}</div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">{id}</span>
+                {count > 0 && (
+                  <span className="text-ok flex shrink-0 items-center gap-1 font-mono text-[11px] font-normal tabular-nums">
+                    <span className="bg-ok inline-block h-1.5 w-1.5" />
+                    {count}
+                  </span>
+                )}
+              </div>
               <div className="text-ink-3 truncate font-sans text-[11px] font-normal">
                 {meta.subtitle}
               </div>
@@ -103,6 +123,8 @@ export interface RoomRailProps {
   blockCount: number;
   onClearBlocks: () => void;
   active: RoomId;
+  pulses?: Record<RoomId, RoomPulse> | null;
+  liveOnline?: number;
 }
 
 export function RoomRail({
@@ -110,6 +132,8 @@ export function RoomRail({
   blockCount,
   onClearBlocks,
   active,
+  pulses,
+  liveOnline,
 }: RoomRailProps) {
   return (
     <nav className="rail" aria-label="Rooms">
@@ -117,7 +141,7 @@ export function RoomRail({
         <div className="rail-label">
           Rooms <span>{ROOM_IDS.length}</span>
         </div>
-        <RoomLinks active={active} />
+        <RoomLinks active={active} pulses={pulses} liveOnline={liveOnline} />
       </div>
 
       <HandlePanel

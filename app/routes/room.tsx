@@ -11,6 +11,7 @@ import { RoomRail } from "~/components/room/RoomRail";
 import { TopBar } from "~/components/room/TopBar";
 import { ensurePseudonym } from "~/lib/membership.server";
 import { requireSession } from "~/lib/require-role.server";
+import { readRoomPulses } from "~/lib/room.server";
 import {
   loadBlocked,
   RoomConnection,
@@ -38,11 +39,15 @@ export function meta({ loaderData }: Route.MetaArgs) {
 export async function loader({ request, params }: Route.LoaderArgs) {
   const actor = await requireSession(request);
   if (!isRoomId(params.roomId)) throw data("No such room.", { status: 404 });
-  const member = await ensurePseudonym(actor.member);
+  const [member, pulses] = await Promise.all([
+    ensurePseudonym(actor.member),
+    readRoomPulses(),
+  ]);
   return {
     pseudonym: member.pseudonym ?? "",
     isModerator: actor.member.isModerator,
     room: ROOMS[params.roomId],
+    pulses,
   };
 }
 const EMPTY: ReadonlySet<string> = new Set();
@@ -57,11 +62,7 @@ export default function RoomRoute({ loaderData }: Route.ComponentProps) {
   return <RoomView key={loaderData.room.id} loaderData={loaderData} />;
 }
 
-function RoomView({
-  loaderData,
-}: {
-  loaderData: Route.ComponentProps["loaderData"];
-}) {
+function RoomView({ loaderData }: Pick<Route.ComponentProps, "loaderData">) {
   const room = loaderData.room;
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [pseudonym, setPseudonym] = useState(loaderData.pseudonym);
@@ -78,16 +79,14 @@ function RoomView({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [draft, setDraft] = useState<ComposerDraft | null>(null);
   const draftSeq = useRef(0);
-
-  const handleMention = useCallback((who: string) => {
-    draftSeq.current += 1;
-    setDraft({ text: `@${who} `, seq: draftSeq.current });
-  }, []);
-
   const handleStarter = useCallback((text: string) => {
     draftSeq.current += 1;
     setDraft({ text, seq: draftSeq.current });
   }, []);
+  const handleMention = useCallback(
+    (who: string) => handleStarter(`@${who} `),
+    [handleStarter],
+  );
 
   useEffect(() => {
     const wide = window.matchMedia("(min-width: 1041px)");
@@ -331,6 +330,8 @@ function RoomView({
           blockCount={blocked.size}
           onClearBlocks={handleClearBlocks}
           active={room.id}
+          pulses={loaderData.pulses}
+          liveOnline={online}
         />
 
         <main className="chat">
@@ -391,6 +392,8 @@ function RoomView({
         blockCount={blocked.size}
         onClearBlocks={handleClearBlocks}
         onMention={handleMention}
+        pulses={loaderData.pulses}
+        liveOnline={online}
       />
     </div>
   );

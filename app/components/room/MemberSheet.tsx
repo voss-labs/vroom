@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MouseEvent } from "react";
 
+import type { RoomPulse } from "~/lib/room.server";
 import type { RoomId } from "~/lib/rooms";
 import { MemberList } from "./MemberRail";
 import { HandlePanel, RoomLinks } from "./RoomRail";
@@ -48,6 +49,8 @@ export interface MemberSheetProps {
   self: string;
   blockCount: number;
   onClearBlocks: () => void;
+  pulses?: Record<RoomId, RoomPulse> | null;
+  liveOnline?: number;
   onMention?: (who: string) => void;
 }
 
@@ -59,6 +62,8 @@ export function MemberSheet({
   self,
   blockCount,
   onClearBlocks,
+  pulses,
+  liveOnline,
   onMention,
 }: MemberSheetProps) {
   const ref = useRef<HTMLDialogElement | null>(null);
@@ -100,7 +105,12 @@ export function MemberSheet({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         <div className="rail-label">Rooms</div>
-        <RoomLinks active={active} onNavigate={onClose} />
+        <RoomLinks
+          active={active}
+          pulses={pulses}
+          liveOnline={liveOnline}
+          onNavigate={onClose}
+        />
         <div className="rail-label">
           Online <span>{members.length}</span>
         </div>

@@ -94,6 +94,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     stats: live ? live.stats : null,
     roomState: live ? live.roomState : null,
     counts: live ? live.counts : null,
+    perRoom: live ? (live.perRoom ?? null) : null,
     page,
     totalReports,
     pageCount: Math.max(1, Math.ceil(totalReports / REPORTS_PAGE_SIZE)),
@@ -165,6 +166,7 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
     stats,
     roomState,
     counts,
+    perRoom,
   } = loaderData;
   const { page, pageCount, totalReports } = loaderData;
 
@@ -226,6 +228,38 @@ export default function ModConsole({ loaderData }: Route.ComponentProps) {
             killedAt={roomState ? roomState.killedAt : null}
             killedBy={roomState ? roomState.killedBy : null}
           />
+
+          {perRoom && perRoom.length > 0 ? (
+            <section className="card" aria-label="Room activity">
+              <div className="card-head">
+                <h2>Room Pulse</h2>
+                <span className="tag">5 rooms · 48h window</span>
+              </div>
+              <div className="divide-line grid grid-cols-5 divide-x max-[860px]:grid-cols-2 max-[520px]:grid-cols-1">
+                {perRoom.map((r) => (
+                  <Link
+                    key={r.roomId}
+                    to={`/room/${r.roomId}`}
+                    className="hover:bg-bg-2 flex items-center justify-between gap-2 px-4 py-3 text-[13px] transition-colors"
+                  >
+                    <span className="text-ink font-mono font-semibold">
+                      #{r.roomId}
+                    </span>
+                    <span className="text-ink-3 font-mono text-[11.5px]">
+                      <strong
+                        className={
+                          r.online > 0 ? "text-ok font-semibold" : "text-ink-3"
+                        }
+                      >
+                        {r.online}
+                      </strong>{" "}
+                      live · {r.messages} msgs
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <ReportTable
             reports={reports}
