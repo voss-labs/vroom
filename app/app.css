@@ -2,16 +2,3 @@
 @import "./styles/base.css";
 @import "./styles/rails.css";
 @import "./styles/room.css";
-@import "./styles/console.css";
-
-/**
- * The approved interface is prototype.html. Its tokens are reproduced here
- * verbatim as Tailwind v4 theme variables, and the dense, repeated patterns
- * (chat rows, rails, data tables) are kept as component classes with the same
- * names the prototype uses, so fidelity stays checkable by diffing against it.
- * Everything else is written with utilities.
- *
- * Split along the seams the file already had — tokens and frame, room, console.
- * One 915-line stylesheet was the only file in the repo over the size AGENTS.md
- * sets, and each part is read on its own anyway.
- */

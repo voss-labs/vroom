@@ -29,8 +29,10 @@ XIP first rather than changing the code and explaining afterwards.
 Decided in VRIP-03. Do not substitute parts of it without a superseding XIP.
 
 - One Cloudflare Worker serves everything. React Router v8 in framework mode
-  renders both the room and the moderator console, and the Durable Object class is
+  renders the student rooms, and the Durable Object class is
   exported from the same Worker entry (VRIP-06, superseding VRIP-03's Pages line)
+- Moderation: interactive terminal and explicit commands call the authenticated Worker
+  API; no browser console (VRIP-16).
 - Styling: Tailwind + shadcn, mobile-first, matching voss-auth's components.json
 - Realtime: one Durable Object per room on the WebSocket Hibernation API
 - Message history: Durable Object SQLite storage
@@ -68,7 +70,8 @@ Decided in VRIP-03. Do not substitute parts of it without a superseding XIP.
  `reveal_must_be_bound` CHECK stays so historical audit rows remain valid.
 - Every moderator action re-checks the role on the server, and refuses any
  member without a V Auth account. Hiding the navigation
-  entry is presentation, not access control.
+  entry is presentation, not access control. Public student routes accept only
+  device sessions; a V Auth session must never replace a device identity.
 - Rate limiting is keyed per pseudonym, not per socket. Two tabs must not double
  anyone's budget.
 - Never run `drizzle-kit push` against a database that already has data. It

@@ -8,7 +8,6 @@ export interface TopBarProps {
   room: RoomMeta;
   online: number;
   killed: boolean;
-  isModerator: boolean;
   /** Below 1040px the count becomes the button that opens the member sheet. */
   onOpenMembers: () => void;
 }
@@ -18,13 +17,7 @@ export interface TopBarProps {
  * VRIP-11 pushed that file past its 400-line budget: it is the one block in the
  * route that reads no socket state of its own.
  */
-export function TopBar({
-  room,
-  online,
-  killed,
-  isModerator,
-  onOpenMembers,
-}: TopBarProps) {
+export function TopBar({ room, online, killed, onOpenMembers }: TopBarProps) {
   const pill = (
     <>
       <span className={cn("mark", killed && "mark-dead")} />
@@ -43,11 +36,6 @@ export function TopBar({
           <Link to={`/room/${room.id}`} className="tab" aria-current="page">
             {room.name}
           </Link>
-          {isModerator ? (
-            <Link to="/mod" className="tab">
-              Moderation
-            </Link>
-          ) : null}
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">

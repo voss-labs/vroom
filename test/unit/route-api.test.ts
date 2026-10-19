@@ -8,35 +8,23 @@ import type { MemberRecord } from "~/db/queries/members";
  * and the script door's bearer compare had no throttle.
  */
 
-const getSessionUser = vi.fn();
-const ensureMember = vi.fn();
+const readDeviceSession = vi.fn();
 const findMemberByPseudonym = vi.fn();
 const findMemberById = vi.fn();
 const countRecentReportsBy = vi.fn();
 const createReport = vi.fn();
 const getMessage = vi.fn();
-const checkScriptAuth = vi.fn();
-const roomSuspend = vi.fn();
-const setKilled = vi.fn();
-const writeAudit = vi.fn();
-const resolveIdentity = vi.fn();
 
 let roomReachable = true;
 let roomsAsked: string[] = [];
 const roomStub = {
   getMessage: (...a: unknown[]) => getMessage(...a),
-  checkScriptAuth: (...a: unknown[]) => checkScriptAuth(...a),
-  suspend: (...a: unknown[]) => roomSuspend(...a),
-  setKilled: (...a: unknown[]) => setKilled(...a),
-  restore: vi.fn(),
-  deleteMessage: vi.fn(async () => ({ ok: true })),
 };
 
-vi.mock("~/lib/auth.server", () => ({
-  getSessionUser: (...a: unknown[]) => getSessionUser(...a),
+vi.mock("~/lib/device-session.server", () => ({
+  readDeviceSession: (...a: unknown[]) => readDeviceSession(...a),
 }));
 vi.mock("~/db/queries/members", () => ({
-  ensureMember: (...a: unknown[]) => ensureMember(...a),
   findMemberByPseudonym: (...a: unknown[]) => findMemberByPseudonym(...a),
   findMemberById: (...a: unknown[]) => findMemberById(...a),
   claimPseudonym: vi.fn(),
@@ -47,12 +35,6 @@ vi.mock("~/db/queries/reports", () => ({
   createReport: (...a: unknown[]) => createReport(...a),
   findReport: vi.fn(async () => null),
   setReportStatus: vi.fn(async () => true),
-}));
-vi.mock("~/db/queries/audit", () => ({
-  writeAudit: (...a: unknown[]) => writeAudit(...a),
-}));
-vi.mock("~/lib/identity.server", () => ({
-  resolveIdentity: (...a: unknown[]) => resolveIdentity(...a),
 }));
 vi.mock("~/lib/room.server", () => ({
   RoomUnreachable: class RoomUnreachable extends Error {},
@@ -71,8 +53,6 @@ vi.mock("~/lib/room.server", () => ({
 
 const { action: report } = await import("~/routes/api.report");
 const { action: socketToken } = await import("~/routes/api.socket-token");
-const { action: modApi } = await import("~/routes/api.mod.$action");
-const { ROOM_IDS } = await import("~/lib/rooms");
 
 const REPORT = { messageId: "msg1", roomId: "campus-live" };
 
@@ -81,7 +61,7 @@ type Args = Parameters<typeof report>[0];
 function member(overrides: Partial<MemberRecord> = {}): MemberRecord {
   return {
     id: "m1",
-    userId: "u1",
+    userId: null,
     pseudonym: "quiet-ibex",
     isModerator: false,
     suspendedAt: null,
@@ -125,8 +105,8 @@ beforeEach(() => {
   roomReachable = true;
   roomsAsked = [];
   process.env.APP_JWT_SECRET = "test-app-jwt-secret-value-not-a-real-one";
-  getSessionUser.mockResolvedValue({ id: "u1" });
-  ensureMember.mockResolvedValue(member());
+  readDeviceSession.mockResolvedValue("m1");
+  findMemberById.mockResolvedValue(member());
   countRecentReportsBy.mockResolvedValue(0);
   createReport.mockResolvedValue({ id: "r1" });
   getMessage.mockResolvedValue({
@@ -139,9 +119,6 @@ beforeEach(() => {
   findMemberByPseudonym.mockResolvedValue(
     member({ id: "m2", pseudonym: "grumpy-heron" }),
   );
-  checkScriptAuth.mockResolvedValue({ allowed: true, retryAfter: 0 });
-  process.env.MOD_SCRIPT_TOKEN = "a-long-enough-script-token";
-  process.env.MOD_SCRIPT_MEMBER_HANDLE = "quiet-ibex";
 });
 
 describe("POST /api/report", () => {
@@ -156,7 +133,7 @@ describe("POST /api/report", () => {
   });
 
   it("refuses a suspended reporter", async () => {
-    ensureMember.mockResolvedValue(member({ suspendedAt: new Date() }));
+    findMemberById.mockResolvedValue(member({ suspendedAt: new Date() }));
     const response = await report(json("/api/report", REPORT));
 
     expect(response.status).toBe(403);
@@ -167,7 +144,7 @@ describe("POST /api/report", () => {
   });
 
   it("refuses a tombstoned reporter through the same check", async () => {
-    ensureMember.mockResolvedValue(member({ deletedAt: new Date() }));
+    findMemberById.mockResolvedValue(member({ deletedAt: new Date() }));
     const response = await report(json("/api/report", REPORT));
     expect(response.status).toBe(403);
     expect(createReport).not.toHaveBeenCalled();
@@ -202,11 +179,11 @@ describe("POST /api/report", () => {
     );
     expect(response.status).toBe(403);
     expect((await payload(response)).error?.code).toBe("cross_origin");
-    expect(getSessionUser).not.toHaveBeenCalled();
+    expect(readDeviceSession).not.toHaveBeenCalled();
   });
 
   it("still refuses an unauthenticated same-origin post", async () => {
-    getSessionUser.mockResolvedValue(null);
+    readDeviceSession.mockResolvedValue(null);
     const response = await report(json("/api/report", REPORT));
     expect(response.status).toBe(401);
   });
@@ -249,11 +226,11 @@ describe("POST /api/socket-token", () => {
     );
     expect(response.status).toBe(403);
     expect((await payload(response)).error?.code).toBe("cross_origin");
-    expect(getSessionUser).not.toHaveBeenCalled();
+    expect(readDeviceSession).not.toHaveBeenCalled();
   });
 
   it("refuses a suspended member a token", async () => {
-    ensureMember.mockResolvedValue(member({ suspendedAt: new Date() }));
+    findMemberById.mockResolvedValue(member({ suspendedAt: new Date() }));
     const response = await socketToken(
       json("/api/socket-token", { roomId: "campus-live" }),
     );
@@ -278,121 +255,6 @@ describe("POST /api/socket-token", () => {
       expect(response.status).toBe(400);
       expect((await payload(response)).error?.code).toBe("unknown_room");
     }
-    expect(ensureMember).not.toHaveBeenCalled();
-  });
-});
-
-describe("POST /api/mod/:action", () => {
-  function scriptCall(
-    intent: string,
-    body: unknown,
-    headers: Record<string, string> = {},
-  ) {
-    return modApi(
-      json(
-        `/api/mod/${intent}`,
-        body,
-        { authorization: `Bearer ${process.env.MOD_SCRIPT_TOKEN}`, ...headers },
-        { action: intent },
-      ),
-    );
-  }
-
-  it("refuses a suspended designated moderator, token or no token", async () => {
-    findMemberByPseudonym.mockResolvedValue(
-      member({ isModerator: true, suspendedAt: new Date() }),
-    );
-    const response = await scriptCall("set_room_state", { killed: true });
-
-    expect(response.status).toBe(403);
-    expect((await payload(response)).error?.code).toBe("not_moderator");
-    expect(setKilled).not.toHaveBeenCalled();
-  });
-
-  it("refuses a designated row that is not a moderator", async () => {
-    findMemberByPseudonym.mockResolvedValue(member({ isModerator: false }));
-    const response = await scriptCall("set_room_state", { killed: true });
-    expect(response.status).toBe(403);
-    expect(setKilled).not.toHaveBeenCalled();
-  });
-
-  it("throttles attempts through shared state, not per isolate", async () => {
-    checkScriptAuth.mockResolvedValue({ allowed: false, retryAfter: 42 });
-    const response = await scriptCall("set_room_state", { killed: true });
-
-    expect(response.status).toBe(429);
-    expect((await payload(response)).error?.code).toBe("rate_limited");
-    expect(checkScriptAuth).toHaveBeenCalledWith(expect.any(Number));
-    expect(roomsAsked).toEqual(["campus-live"]);
-  });
-
-  it("keeps working when the object cannot be reached, since the token still gates it", async () => {
-    roomReachable = false;
-    findMemberByPseudonym.mockResolvedValue(member({ isModerator: true }));
-    const response = await scriptCall("dismiss_report", { reportId: "r1" });
-    // Not a 429: an unreachable throttle must not take moderation offline.
-    expect(response.status).not.toBe(429);
-  });
-
-  it("refuses a wrong token, and a right token of the wrong length", async () => {
-    findMemberByPseudonym.mockResolvedValue(member({ isModerator: true }));
-
-    const wrong = await modApi(
-      json(
-        "/api/mod/suspend",
-        {},
-        { authorization: "Bearer not-the-token" },
-        { action: "suspend" },
-      ),
-    );
-    expect(wrong.status).toBe(401);
-
-    const truncated = await modApi(
-      json(
-        "/api/mod/suspend",
-        {},
-        {
-          authorization: `Bearer ${process.env.MOD_SCRIPT_TOKEN!.slice(0, 8)}`,
-        },
-        { action: "suspend" },
-      ),
-    );
-    expect(truncated.status).toBe(401);
-    expect(roomSuspend).not.toHaveBeenCalled();
-  });
-
-  it("refuses a browser that announces itself as cross-origin", async () => {
-    const response = await scriptCall(
-      "set_room_state",
-      { killed: true },
-      {
-        "sec-fetch-site": "cross-site",
-      },
-    );
-    expect(response.status).toBe(403);
-    expect((await payload(response)).error?.code).toBe("cross_origin");
-  });
-
-  it("still admits the script, which sends no browser fetch metadata at all", async () => {
-    findMemberByPseudonym.mockResolvedValue(member({ isModerator: true }));
-    const request = new Request("https://v-rooms.test/api/mod/set_room_state", {
-      method: "POST",
-      body: JSON.stringify({ killed: true }),
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${process.env.MOD_SCRIPT_TOKEN}`,
-      },
-    });
-    setKilled.mockResolvedValue({ killed: true, at: 1 });
-    writeAudit.mockResolvedValue({ id: "a1" });
-
-    const response = await modApi({
-      request,
-      params: { action: "set_room_state" },
-      context: {},
-    } as unknown as Args);
-
-    expect(response.status).toBe(200);
-    expect(setKilled).toHaveBeenCalledTimes(ROOM_IDS.length);
+    expect(readDeviceSession).not.toHaveBeenCalled();
   });
 });

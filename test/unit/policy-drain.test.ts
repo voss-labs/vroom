@@ -1,49 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-
 import type { FlagRow } from "../../workers/policy-store";
-
-/**
- * The bridge between the identity-blind room object and Neon.
- *
- * Two properties are worth more than the rest of this file: a flag never
- * becomes two reports, and the Durable Object never gains the ability to
- * resolve a pseudonym to a person. The first is a behaviour, the second is a
- * structural claim about the module graph, so they are tested differently.
- */
 
 const drainFlags = vi.fn();
 const ackFlags = vi.fn();
 const findMemberByPseudonym = vi.fn();
-const setSuspended = vi.fn();
-const createAutoFlagReport = vi.fn();
-const writeAudit = vi.fn();
+const materializePolicyFlag = vi.fn();
+let activeRooms: Set<string>;
 
 vi.mock("~/lib/room.server", () => ({
-  RoomUnreachable: class RoomUnreachable extends Error {},
-  getRoom: async () => ({ drainFlags, ackFlags }),
-  // Faithful to the real helper, which swallows an unreachable object and
-  // returns null rather than throwing. The degrading test below depends on it.
-  // Only campus-live holds flags here; the other rooms drain empty.
   tryRoom: async (id: string, fn: (stub: unknown) => unknown) => {
-    if (id !== "campus-live") return [];
+    if (!activeRooms.has(id)) return [];
     try {
-      return await fn({ drainFlags, ackFlags });
+      return await fn({ drainFlags: () => drainFlags(id), ackFlags });
     } catch {
       return null;
     }
   },
 }));
 vi.mock("~/db/queries/members", () => ({
-  findMemberByPseudonym: (...a: unknown[]) => findMemberByPseudonym(...a),
-  setSuspended: (...a: unknown[]) => setSuspended(...a),
+  findMemberByPseudonym: (...args: unknown[]) => findMemberByPseudonym(...args),
 }));
-vi.mock("~/db/queries/reports", () => ({
-  createAutoFlagReport: (...a: unknown[]) => createAutoFlagReport(...a),
-}));
-vi.mock("~/db/queries/audit", () => ({
-  writeAudit: (...a: unknown[]) => writeAudit(...a),
+vi.mock("~/db/queries/policy-flags", () => ({
+  materializePolicyFlag: (...args: unknown[]) => materializePolicyFlag(...args),
 }));
 
 const { drainPolicyFlags } = await import("~/lib/policy.server");
@@ -63,188 +43,217 @@ function flag(overrides: Partial<FlagRow> = {}): FlagRow {
   };
 }
 
-/** Stands in for the partial unique index: one flag id, one report, ever. */
-function neonWithUniqueIndex() {
+function materializeOnce() {
   const seen = new Set<string>();
-  createAutoFlagReport.mockImplementation(
+  materializePolicyFlag.mockImplementation(
     async (input: { roomId: string; flagId: number }) => {
       const key = `${input.roomId}:${input.flagId}`;
       if (seen.has(key)) return null;
       seen.add(key);
-      return { id: `report-${input.flagId}` };
+      return { id: `report-${key}` };
     },
   );
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  activeRooms = new Set(["campus-live"]);
   findMemberByPseudonym.mockResolvedValue({ id: "member-1" });
-  setSuspended.mockResolvedValue(null);
-  writeAudit.mockResolvedValue({ id: "audit-1" });
-  neonWithUniqueIndex();
+  drainFlags.mockResolvedValue([]);
+  materializeOnce();
 });
 
-describe("materialising flags as reports", () => {
-  it("files the snippet against the member behind the handle", async () => {
-    drainFlags.mockResolvedValue([flag()]);
-
-    const result = await drainPolicyFlags();
-
-    expect(result).toMatchObject({ drained: 1, created: 1, suspended: 0 });
-    expect(createAutoFlagReport).toHaveBeenCalledWith(
-      expect.objectContaining({
-        roomId: "campus-live",
-        flagId: 7,
-        reportedMemberId: "member-1",
-        snippet: "bc swift-heron is at it again",
-      }),
-    );
-    // The cursor moves only once the flag is genuinely dealt with.
+describe("atomic policy materialization boundary", () => {
+  it("passes the report and optional mirror as one operation before acknowledging", async () => {
+    const order: string[] = [];
+    drainFlags.mockResolvedValue([flag({ autoSuspended: true })]);
+    materializePolicyFlag.mockImplementationOnce(async () => {
+      order.push("materialize");
+      return { id: "r7" };
+    });
+    ackFlags.mockImplementationOnce(async () => {
+      order.push("ack");
+    });
+    expect(await drainPolicyFlags()).toMatchObject({
+      drained: 1,
+      created: 1,
+      suspended: 1,
+      unreachable: false,
+    });
+    expect(materializePolicyFlag).toHaveBeenCalledWith({
+      roomId: "campus-live",
+      flagId: 7,
+      reportedMemberId: "member-1",
+      pseudonym: "quiet-ibex",
+      snippet: "bc swift-heron is at it again",
+      reason:
+        "Blocked automatically: abuse, a handle aimed at someone named in it.",
+      autoSuspended: true,
+    });
+    expect(order).toEqual(["materialize", "ack"]);
     expect(ackFlags).toHaveBeenCalledWith(7);
   });
 
-  it("never turns one flag into two reports across two drains", async () => {
-    // The object's cursor advances on ack, not on read, so a console that dies
-    // mid-write sees the same flags again. This is the layer that makes seeing
-    // them twice harmless.
-    drainFlags.mockResolvedValue([flag({ id: 11 })]);
-
-    const first = await drainPolicyFlags();
-    const second = await drainPolicyFlags();
-
-    expect(first.created).toBe(1);
-    expect(second.drained).toBe(1);
-    expect(second.created).toBe(0);
-    expect(createAutoFlagReport).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not re-suspend on a repeat drain", async () => {
-    drainFlags.mockResolvedValue([flag({ id: 12, autoSuspended: true })]);
-
-    await drainPolicyFlags();
-    await drainPolicyFlags();
-
-    expect(setSuspended).toHaveBeenCalledTimes(1);
-    expect(writeAudit).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("what reaches Neon (VRIP-10)", () => {
-  it("strips a value out of the snippet before it becomes a report", async () => {
-    // Redacted at the boundary rather than trusted from the object. Neon is
-    // permanent and joined to identity, and the queue can still hold flags
-    // written before VRIP-10 — this is the last gate in front of both.
-    drainFlags.mockResolvedValue([
-      flag({ id: 40, snippet: "bc quiet-ibex ring 9876543210 tonight" }),
-    ]);
-
-    await drainPolicyFlags();
-
-    const written = createAutoFlagReport.mock.calls[0][0] as {
-      snippet: string;
-      reason: string;
-    };
-    expect(written.snippet).not.toContain("9876543210");
-    expect(written.snippet).not.toMatch(/\d/);
-    // The incident itself still arrives. Redaction is not deletion.
-    expect(written.snippet).toContain("quiet-ibex");
-    expect(written.snippet).toContain("a phone number");
-    // The reason is built from labels, so it can never carry a value either.
-    expect(written.reason).not.toMatch(/\d/);
-  });
-
-  it("files a personal-data flag as the fact and not a copy", async () => {
-    drainFlags.mockResolvedValue([
-      flag({
-        id: 41,
-        tier: "confirm",
-        matches: "a phone number",
-        snippet:
-          "a phone number shared. Not stored, and the value is not recorded.",
-        targeted: false,
-      }),
-    ]);
-
-    await drainPolicyFlags();
-
-    const written = createAutoFlagReport.mock.calls[0][0] as {
-      snippet: string;
-    };
-    expect(written.snippet).not.toMatch(/\d/);
-    expect(written.snippet).toContain("a phone number");
-  });
-});
-
-describe("mirroring an auto-suspension", () => {
-  it("writes the Neon suspension and an audit row with no human actor", async () => {
-    drainFlags.mockResolvedValue([flag({ id: 20, autoSuspended: true })]);
-
-    const result = await drainPolicyFlags();
-
-    expect(result.suspended).toBe(1);
-    expect(setSuspended).toHaveBeenCalledWith(
-      "member-1",
-      true,
-      expect.any(String),
+  it("waits for all Neon effects to commit before advancing acknowledgement", async () => {
+    let release!: () => void;
+    materializePolicyFlag.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ id: "r7" });
+        }),
     );
-    expect(writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "auto_suspend",
-        // Nobody decided this. An audit row naming a moderator would be a lie.
-        actorMemberId: null,
-        targetType: "member",
-        targetId: "member-1",
-        reportId: "report-20",
-      }),
+    drainFlags.mockResolvedValue([flag({ autoSuspended: true })]);
+    const pending = drainPolicyFlags();
+    await vi.waitFor(() =>
+      expect(materializePolicyFlag).toHaveBeenCalledOnce(),
     );
+    expect(ackFlags).not.toHaveBeenCalled();
+    release();
+    expect((await pending).unreachable).toBe(false);
+    expect(ackFlags).toHaveBeenCalledWith(7);
   });
 
-  it("leaves a plain block alone", async () => {
-    drainFlags.mockResolvedValue([flag({ id: 21 })]);
-    await drainPolicyFlags();
-    expect(setSuspended).not.toHaveBeenCalled();
-  });
-});
-
-describe("degrading", () => {
-  it("acknowledges and drops a handle with no member behind it", async () => {
-    // Retrying forever would wedge the drain on one unusable row and every
-    // later flag behind it.
-    findMemberByPseudonym.mockResolvedValue(null);
-    drainFlags.mockResolvedValue([flag({ id: 30 })]);
-
-    const result = await drainPolicyFlags();
-
-    expect(result.created).toBe(0);
-    expect(createAutoFlagReport).not.toHaveBeenCalled();
-    expect(ackFlags).toHaveBeenCalledWith(30);
-  });
-
-  it("reports an unreachable room rather than taking the queue down", async () => {
-    // The queue is the only surface a moderator has. A sleeping room object
-    // must not be what stops them reading it.
-    drainFlags.mockRejectedValue(new Error("no object"));
-
-    const result = await drainPolicyFlags();
-
-    expect(result.unreachable).toBe(true);
-    expect(result.created).toBe(0);
-    expect(createAutoFlagReport).not.toHaveBeenCalled();
-  });
-
-  it("does nothing at all when there is nothing to drain", async () => {
-    drainFlags.mockResolvedValue([]);
-    const result = await drainPolicyFlags();
-    expect(result).toEqual({
-      drained: 0,
+  it("does not turn a completed flag into another report or suspension", async () => {
+    drainFlags.mockResolvedValue([flag({ autoSuspended: true })]);
+    expect(await drainPolicyFlags()).toMatchObject({
+      created: 1,
+      suspended: 1,
+    });
+    expect(await drainPolicyFlags()).toMatchObject({
       created: 0,
       suspended: 0,
       unreachable: false,
     });
-    expect(ackFlags).not.toHaveBeenCalled();
+    expect(materializePolicyFlag).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps ordinary blocked reports free of suspension mirroring", async () => {
+    drainFlags.mockResolvedValue([flag()]);
+    expect(await drainPolicyFlags()).toMatchObject({
+      created: 1,
+      suspended: 0,
+    });
+    expect(materializePolicyFlag).toHaveBeenCalledWith(
+      expect.objectContaining({ autoSuspended: false }),
+    );
+  });
+
+  it("redacts personal values again at the Neon boundary", async () => {
+    drainFlags.mockResolvedValue([
+      flag({ snippet: "bc quiet-ibex ring 9876543210 tonight" }),
+    ]);
+    await drainPolicyFlags();
+    const input = materializePolicyFlag.mock.calls[0][0] as {
+      snippet: string;
+      reason: string;
+    };
+    expect(input.snippet).not.toMatch(/\d/);
+    expect(input.snippet).toContain("a phone number");
+    expect(input.reason).not.toMatch(/\d/);
   });
 });
 
+describe("drain failures and retries", () => {
+  it("leaves failed atomic materialization unacknowledged and retries it", async () => {
+    drainFlags.mockResolvedValue([flag({ autoSuspended: true })]);
+    materializePolicyFlag.mockRejectedValueOnce(
+      new Error("atomic database operation failed"),
+    );
+    expect(await drainPolicyFlags()).toMatchObject({
+      unreachable: true,
+      unreachableRooms: ["campus-live"],
+    });
+    expect(ackFlags).not.toHaveBeenCalled();
+    expect(await drainPolicyFlags()).toMatchObject({
+      created: 1,
+      suspended: 1,
+      unreachable: false,
+    });
+    expect(ackFlags).toHaveBeenCalledWith(7);
+  });
+
+  it("does not reapply completed work after acknowledgement fails", async () => {
+    drainFlags.mockResolvedValue([flag({ autoSuspended: true })]);
+    ackFlags.mockRejectedValueOnce(new Error("room unavailable"));
+    expect(await drainPolicyFlags()).toMatchObject({
+      created: 1,
+      suspended: 1,
+      unreachable: true,
+    });
+    expect(await drainPolicyFlags()).toMatchObject({
+      created: 0,
+      suspended: 0,
+      unreachable: false,
+    });
+    expect(ackFlags).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a pending overlapping drain from acknowledging before materialization", async () => {
+    const releases: Array<(value: { id: string } | null) => void> = [];
+    materializePolicyFlag.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releases.push(resolve);
+        }),
+    );
+    drainFlags.mockResolvedValue([flag({ autoSuspended: true })]);
+    const pending = [drainPolicyFlags(), drainPolicyFlags()];
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    expect(ackFlags).not.toHaveBeenCalled();
+    releases[0]({ id: "r7" });
+    releases[1](null);
+    const results = await Promise.all(pending);
+    expect(results.reduce((sum, result) => sum + result.created, 0)).toBe(1);
+    expect(results.reduce((sum, result) => sum + result.suspended, 0)).toBe(1);
+    expect(results.every((result) => !result.unreachable)).toBe(true);
+  });
+
+  it("drains reachable rooms even if another room's database operation fails", async () => {
+    activeRooms.add("hostel");
+    drainFlags.mockResolvedValue([flag()]);
+    materializePolicyFlag.mockImplementation(
+      async (input: { roomId: string }) => {
+        if (input.roomId === "hostel") throw new Error("database unavailable");
+        return { id: "campus-report" };
+      },
+    );
+    expect(await drainPolicyFlags()).toMatchObject({
+      created: 1,
+      unreachable: true,
+      unreachableRooms: ["hostel"],
+    });
+    expect(ackFlags).toHaveBeenCalledOnce();
+  });
+
+  it("acknowledges a handle without a retained member record", async () => {
+    findMemberByPseudonym.mockResolvedValue(null);
+    drainFlags.mockResolvedValue([flag()]);
+    expect((await drainPolicyFlags()).created).toBe(0);
+    expect(materializePolicyFlag).not.toHaveBeenCalled();
+    expect(ackFlags).toHaveBeenCalledWith(7);
+  });
+
+  it("reports an unreachable room without creating a report", async () => {
+    drainFlags.mockRejectedValue(new Error("no object"));
+    expect(await drainPolicyFlags()).toMatchObject({
+      unreachable: true,
+      created: 0,
+      unreachableRooms: ["campus-live"],
+    });
+    expect(materializePolicyFlag).not.toHaveBeenCalled();
+  });
+
+  it("returns an explicit empty drain without acknowledgement", async () => {
+    expect(await drainPolicyFlags()).toEqual({
+      drained: 0,
+      created: 0,
+      suspended: 0,
+      unreachable: false,
+      unreachableRooms: [],
+    });
+    expect(ackFlags).not.toHaveBeenCalled();
+  });
+});
 const WORKERS = fileURLToPath(new URL("../../workers", import.meta.url));
 
 /** Every module the Durable Object pulls in, transitively, keyed by filename. */

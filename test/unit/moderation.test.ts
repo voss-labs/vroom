@@ -85,8 +85,8 @@ beforeEach(() => {
     status: "open",
     createdAt: new Date(),
   });
-  findMemberById.mockResolvedValue(
-    member({ id: "m2", pseudonym: "grumpy-heron" }),
+  findMemberById.mockImplementation(async (id: string) =>
+    id === "m1" ? member() : member({ id: "m2", pseudonym: "grumpy-heron" }),
   );
   setReportStatus.mockImplementation(async () => {
     order.push("neon");
@@ -310,7 +310,9 @@ describe("ordering: enforcement first, record second", () => {
 
 describe("error paths", () => {
   it("reports a missing member", async () => {
-    findMemberById.mockResolvedValue(null);
+    findMemberById.mockImplementation(async (id: string) =>
+      id === "m1" ? member() : null,
+    );
     await expect(
       performModeration(
         { member: member(), kind: "console" },
@@ -321,7 +323,9 @@ describe("error paths", () => {
   });
 
   it("refuses to suspend an account with no handle, since the object keys on it", async () => {
-    findMemberById.mockResolvedValue(member({ id: "m2", pseudonym: null }));
+    findMemberById.mockImplementation(async (id: string) =>
+      id === "m1" ? member() : member({ id: "m2", pseudonym: null }),
+    );
     await expect(
       performModeration(
         { member: member(), kind: "console" },

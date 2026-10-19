@@ -11,9 +11,9 @@
     // "/*": that also captures Vite's dev module URLs (/app/*, /@react-router/*,
     // /@id/*), which then reach the React Router handler, match no route, and
     // 404 — the app renders but never hydrates. Every route exporting an action
-    // lives under /api/*, /mod, or the /ws upgrade; keep this list in step with
+    // lives under /api/* or the /ws upgrade; keep this list in step with
     // app/routes.ts.
-    "run_worker_first": ["/api/*", "/ws", "/mod"],
+    "run_worker_first": ["/api/*", "/ws"],
   },
   "durable_objects": {
     "bindings": [{ "name": "ROOM", "class_name": "CampusRoom" }],
@@ -53,7 +53,7 @@
     "BETTER_AUTH_URL": "https://vroom.vosslabs.org",
     "VROOMS_ORIGIN": "https://vroom.vosslabs.org",
     "VAUTH_DISCOVERY_URL": "https://accounts.vosslabs.org/api/auth/.well-known/openid-configuration",
-    // "off" hides the moderator V Auth link and refuses new V Auth sign-ins;
+    // "off" refuses new V Auth sign-ins;
     // existing sessions keep working. Students use device keys and are not
     // affected (VRIP-13). Set back to "on" and redeploy to reopen.
     "VAUTH_SIGN_IN": "off",
