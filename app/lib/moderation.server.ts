@@ -1,5 +1,6 @@
 import {
   findMemberById,
+  findMemberByPseudonym,
   setSuspended,
   type MemberRecord,
 } from "~/db/queries/members";
@@ -8,15 +9,15 @@ import { writeAudit } from "~/db/queries/audit";
 import { getRoom, RoomUnreachable, type RoomStub } from "~/lib/room.server";
 import { ROOM_IDS, isRoomId, type RoomId } from "~/lib/rooms";
 import { ModerationError } from "~/lib/require-role.server";
-import { requireCurrentModerator } from "~/lib/moderation-actor.server";
+import {
+  requireCurrentModerator,
+  type ModActor,
+} from "~/lib/moderation-actor.server";
 import type { ModIntent, ModResult } from "~/lib/moderation-contract";
 
 export type { ModIntent, ModResult } from "~/lib/moderation-contract";
 
-export interface ModActor {
-  member: MemberRecord;
-  kind: "console" | "script";
-}
+export type { ModActor } from "~/lib/moderation-actor.server";
 
 export const MOD_INTENTS: readonly ModIntent[] = [
   "delete_message",
@@ -36,6 +37,7 @@ export function isModIntent(value: unknown): value is ModIntent {
 export interface ModFields {
   reportId?: string | null;
   memberId?: string | null;
+  handle?: string;
   reason?: string | null;
   killed?: boolean;
 }
@@ -123,6 +125,13 @@ export async function performModeration(
   fields: ModFields,
 ): Promise<ModResult> {
   actor = await requireCurrentModerator(actor);
+  if ((intent === "suspend" || intent === "restore") && fields.handle) {
+    const target = await findMemberByPseudonym(fields.handle);
+    if (!target && !(intent === "suspend" && fields.reportId)) {
+      throw new ModerationError("member_not_found", "No such handle.", 404);
+    }
+    fields = { ...fields, memberId: target?.id ?? null };
+  }
 
   switch (intent) {
     case "delete_message":
@@ -157,11 +166,12 @@ async function deleteMessage(
     unreachable(error);
   }
 
-  await setReportStatus(report.id, "resolved", actor.member.id);
+  await setReportStatus(report.id, "resolved", null);
   await writeAudit({
     action: "delete_message",
-    actorMemberId: actor.member.id,
+    actorMemberId: null,
     actorKind: actor.kind,
+    details: { cliSessionId: actor.sessionId },
     targetType: "message",
     targetId: report.messageId,
     reportId: report.id,
@@ -184,16 +194,19 @@ async function suspend(actor: ModActor, fields: ModFields): Promise<ModResult> {
   await everyRoom((stub) => stub.suspend(handle));
 
   await setSuspended(member.id, true, fields.reason ?? null);
-  if (fields.reportId)
-    await setReportStatus(fields.reportId, "resolved", actor.member.id);
+  if (fields.reportId) await setReportStatus(fields.reportId, "resolved", null);
   await writeAudit({
     action: "suspend",
-    actorMemberId: actor.member.id,
+    actorMemberId: null,
     actorKind: actor.kind,
     targetType: "member",
     targetId: member.id,
     reportId: fields.reportId ?? null,
-    details: { handle: member.pseudonym, reason: fields.reason ?? null },
+    details: {
+      cliSessionId: actor.sessionId,
+      handle: member.pseudonym,
+      reason: fields.reason ?? null,
+    },
   });
   return { intent: "suspend", ok: true };
 }
@@ -239,11 +252,11 @@ async function restore(actor: ModActor, fields: ModFields): Promise<ModResult> {
   await setSuspended(member.id, false);
   await writeAudit({
     action: "restore",
-    actorMemberId: actor.member.id,
+    actorMemberId: null,
     actorKind: actor.kind,
     targetType: "member",
     targetId: member.id,
-    details: { handle: member.pseudonym },
+    details: { cliSessionId: actor.sessionId, handle: member.pseudonym },
   });
   return { intent: "restore", ok: true };
 }
@@ -253,11 +266,7 @@ async function dismissReport(
   fields: ModFields,
 ): Promise<ModResult> {
   const report = await requireReport(fields.reportId);
-  const changed = await setReportStatus(
-    report.id,
-    "dismissed",
-    actor.member.id,
-  );
+  const changed = await setReportStatus(report.id, "dismissed", null);
   if (!changed) {
     throw new ModerationError(
       "already_resolved",
@@ -267,8 +276,9 @@ async function dismissReport(
   }
   await writeAudit({
     action: "dismiss_report",
-    actorMemberId: actor.member.id,
+    actorMemberId: null,
     actorKind: actor.kind,
+    details: { cliSessionId: actor.sessionId },
     targetType: "report",
     targetId: report.id,
     reportId: report.id,
@@ -281,16 +291,19 @@ async function setRoomState(
   fields: ModFields,
 ): Promise<ModResult> {
   const killed = fields.killed === true;
-  const by = actor.member.pseudonym ?? "moderator";
+  const by = `cli:${actor.sessionId}`;
   const results = await everyRoom((stub) => stub.setKilled(killed, by));
   const at = Math.max(...results.map((result) => result.at));
   await writeAudit({
     action: killed ? "room_close" : "room_open",
-    actorMemberId: actor.member.id,
+    actorMemberId: null,
     actorKind: actor.kind,
     targetType: "room",
     targetId: "all",
-    details: fields.reason ? { reason: fields.reason } : null,
+    details: {
+      cliSessionId: actor.sessionId,
+      ...(fields.reason ? { reason: fields.reason } : {}),
+    },
   });
   return { intent: "set_room_state", killed, at };
 }

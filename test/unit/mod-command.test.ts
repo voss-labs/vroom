@@ -1,12 +1,67 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseCommand, type RequestCommand } from "../../scripts/mod-input";
 import { runCommand } from "../../scripts/mod-command";
-import { display, reportText, statusText } from "../../scripts/mod-display";
+import {
+  auditText,
+  display,
+  reportText,
+  statusText,
+} from "../../scripts/mod-display";
 import type { ModClient } from "../../scripts/mod-client";
 
 const reportId = "10000000-0000-4000-8000-000000000001";
 
 describe("moderation commands", () => {
+  it.each([
+    {
+      action: "restore",
+      actorKind: "script",
+      actorHandle: null,
+      actorSessionId: reportId,
+      label: `CLI session ${reportId} (script)`,
+    },
+    {
+      action: "restore",
+      actorKind: "script",
+      actorHandle: "quiet-ibex",
+      actorSessionId: null,
+      label: "quiet-ibex (script)",
+    },
+    {
+      action: "suspend",
+      actorKind: "console",
+      actorHandle: "quiet-ibex",
+      actorSessionId: null,
+      label: "quiet-ibex (console)",
+    },
+    {
+      action: "auto_suspend",
+      actorKind: "script",
+      actorHandle: null,
+      actorSessionId: null,
+      label: "system (script)",
+    },
+    {
+      action: "auto_suspend",
+      actorKind: "script",
+      actorHandle: null,
+      actorSessionId: reportId,
+      label: "system (script)",
+    },
+  ])("keeps $action actor attribution as $label", ({ label, ...actor }) => {
+    const text = auditText({
+      id: "audit-1",
+      ...actor,
+      targetType: "member",
+      targetId: "member-1",
+      reportId: null,
+      details: null,
+      createdAt: "2040-01-01T00:00:00.000Z",
+    });
+    expect(text).toContain(`Actor: ${label}`);
+    if (actor.action === "auto_suspend")
+      expect(text).not.toContain("CLI session");
+  });
   it("enters the same interactive mode with no arguments", () => {
     expect(parseCommand([])).toEqual({ kind: "interactive" });
     expect(parseCommand(["--help"])).toMatchObject({

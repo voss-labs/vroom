@@ -41,10 +41,16 @@ export function accountText(account: AccountItem): string {
 }
 
 export function auditText(item: AuditItem): string {
+  const actor =
+    item.action === "auto_suspend"
+      ? "system"
+      : item.actorSessionId
+        ? `CLI session ${item.actorSessionId}`
+        : (item.actorHandle ?? "unavailable");
   return display(
     [
       `${item.createdAt} | ${item.action}`,
-      `Actor: ${item.actorHandle ?? "unavailable"} (${item.actorKind})`,
+      `Actor: ${actor} (${item.actorKind})`,
       `Target: ${item.targetType} ${item.targetId ?? "unavailable"}`,
       `Report: ${item.reportId ?? "none"}`,
       ...(item.details?.handle ? [`Handle: ${item.details.handle}`] : []),

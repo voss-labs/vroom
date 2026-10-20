@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { call, mocks, DATE, ROOM_IDS, payload } from "./moderation-api-fixture";
+import {
+  call,
+  mocks,
+  DATE,
+  ROOM_IDS,
+  SESSION_ID,
+  payload,
+} from "./moderation-api-fixture";
 
 describe("moderation reads", () => {
   it.each(["reports", "accounts", "audit"])(
@@ -163,6 +170,7 @@ describe("moderation reads", () => {
       id: "a1",
       action: "auto_suspend",
       actorHandle: null,
+      actorSessionId: null,
       actorKind: "console",
       targetType: "member",
       targetId: "target",
@@ -172,6 +180,38 @@ describe("moderation reads", () => {
     });
     expect(mocks.listAudit).toHaveBeenCalledWith(1, 25);
   });
+
+  it.each([
+    ["script", { cliSessionId: SESSION_ID }, SESSION_ID],
+    ["script", { cliSessionId: "malicious label" }, null],
+    ["console", { cliSessionId: SESSION_ID }, null],
+    ["script", { handle: "quiet-ibex" }, null],
+  ])(
+    "projects only validated script-session audit attribution",
+    async (actorKind, details, expected) => {
+      mocks.listAudit.mockResolvedValue([
+        {
+          id: "a1",
+          action: "restore",
+          actorHandle: "historical",
+          actorKind,
+          targetType: "member",
+          targetId: "target",
+          reportId: null,
+          createdAt: DATE,
+          details,
+        },
+      ]);
+      const { data } = await payload(await call("audit"));
+      expect(data.items[0]).toMatchObject({
+        actorHandle: "historical",
+        actorSessionId: expected,
+      });
+      expect(
+        JSON.stringify((data.items[0] as { details: unknown }).details),
+      ).not.toContain("cliSessionId");
+    },
+  );
 
   it("preserves per-room status even when the aggregate is unavailable", async () => {
     const status = {

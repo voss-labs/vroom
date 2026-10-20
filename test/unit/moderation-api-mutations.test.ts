@@ -4,6 +4,7 @@ import {
   mocks,
   member,
   ROOM_IDS,
+  SESSION_ID,
   payload,
 } from "./moderation-api-fixture";
 
@@ -62,8 +63,18 @@ describe("moderation mutation boundary", () => {
     expect(mocks.suspend).toHaveBeenCalledTimes(ROOM_IDS.length);
     expect(mocks.setSuspended).toHaveBeenCalledWith("target", true, "abuse");
     expect(mocks.writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ actorKind: "script", actorMemberId: "actor" }),
+      expect.objectContaining({ actorKind: "script", actorMemberId: null }),
     );
+  });
+
+  it("uses the CLI session correlation id for room kill state", async () => {
+    expect((await call("set_room_state", { killed: true })).status).toBe(200);
+    for (const roomId of ROOM_IDS)
+      expect(mocks.setKilled).toHaveBeenCalledWith(
+        roomId,
+        true,
+        `cli:${SESSION_ID}`,
+      );
   });
 
   it("rejects invalid room state instead of reopening rooms", async () => {

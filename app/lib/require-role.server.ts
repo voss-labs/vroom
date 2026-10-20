@@ -2,7 +2,6 @@ import { redirect } from "react-router";
 
 import { findMemberById, type MemberRecord } from "~/db/queries/members";
 import { readDeviceSession } from "~/lib/device-session.server";
-import { isSuspended } from "~/lib/membership.server";
 
 export interface Actor {
   kind: "device";
@@ -33,14 +32,4 @@ export async function requireSession(request: Request): Promise<Actor> {
   if (!actor)
     throw redirect("/", { headers: { "Cache-Control": "private, no-store" } });
   return actor;
-}
-
-export function assertModerator(member: MemberRecord): void {
-  if (!member.isModerator || isSuspended(member) || member.userId === null) {
-    throw new ModerationError(
-      "not_moderator",
-      "This account is not a moderator.",
-      403,
-    );
-  }
 }

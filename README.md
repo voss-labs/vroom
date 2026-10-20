@@ -2,8 +2,8 @@
 
 Anonymous, real-time campus rooms built by VOSS Labs. A key held in one browser profile
 gets a stable handle. Students provide no account, name, email or phone number;
-clearing site data loses the handle; another browser profile gets its own identity. V Auth identifies
-moderators only.
+clearing site data loses the handle; another browser profile gets its own identity.
+Moderation uses temporary database-authorized CLI sessions (VRIP-18).
 
 Status: v1 in progress. Scope is in `.preset/PRODUCT.md`, with later accepted
 changes in `/vrips/`. VRIP-12 fixes the five-room list, VRIP-13 defines device
@@ -12,7 +12,7 @@ to the terminal.
 
 ## Quick start
 
-Use Node 20+, a Cloudflare account, Neon Postgres and a registered V Auth client.
+Use Node 20+, a Cloudflare account and Neon Postgres. V Auth sign-in stays off.
 
 ```sh
 npm ci
@@ -38,14 +38,14 @@ npm run deploy
 Deploy through `npm run deploy`, which builds before Wrangler reads the generated
 Worker configuration.
 
-The retained-message reporting repair requires migration
-`0004_retained_report_author.sql`. The authorized deployment step must apply
-`npm run db:migrate` before merging that repair: Cloudflare automatically deploys
-merged main, and the new code requires the new column. Contributors must not run
-production migrations themselves. Do not use `db:push` on an existing database.
-A code-only rollback to older report readers can hide reports without a linked
-account, even though evidence remains stored. Prefer a forward code repair; do
-not reverse nullable schema or delete reports to make an old build work.
+The current code requires migrations `0004_retained_report_author.sql` and
+`0005_cli_sessions.sql`, applied in order with `npm run db:migrate` after rollout
+approval. Cloudflare automatically deploys merged main; apply pending migrations
+before merge. Contributors must not run production migrations themselves. The
+last read-only production check found only 0001-0003 applied; verify the live
+ledger again before rollout. This implementation grants no production rollout
+authority. Do not use `db:push` on an existing database. A code rollback must
+preserve retained report evidence and the session authority boundary.
 
 The optional PostgreSQL regression suite exercises policy-drain rollback and
 concurrent retries using the actual compiled statement. Point it only at a
@@ -61,7 +61,8 @@ VROOM_POLICY_PG_SOCKET=/absolute/socket-directory VROOM_POLICY_PG_PORT=5432 npx 
 One Cloudflare Worker serves React Router and WebSocket upgrades. Each room has
 a Durable Object using SQLite and WebSocket Hibernation. It stores enforcement
 state and messages, which expire after 48 hours. Neon holds device-key hashes,
-moderator members, retained reports and the audit trail. A report snapshots the
+temporary CLI sessions, retained reports and the audit trail. Historical auth
+records remain stored. A report snapshots the
 message before expiry; its evidence and audit records outlive room messages.
 
 The non-extractable private key persists in origin-local IndexedDB. Tabs and
@@ -79,12 +80,19 @@ them as student identity.
 
 ## Moderation
 
-Run the terminal from this repository. The laptop needs `VROOMS_ORIGIN` and
-`MOD_SCRIPT_TOKEN` in its environment or local `.env`. The Worker needs the same
-token and `MOD_SCRIPT_MEMBER_HANDLE`, naming a current, active V Auth moderator
-member. Never pass the token as an argument. Use HTTPS; HTTP is accepted only for
-loopback development. Origins with credentials, paths, queries or fragments are
-rejected, and the client refuses redirects.
+Run the terminal from this repository with `DATABASE_URL` and `VROOMS_ORIGIN` in
+the environment or local `.env`. Inherited environment values take precedence.
+The database credential must have permission to register a CLI session: read-only
+access is insufficient. Never pass credentials as arguments. HTTPS is required
+except for HTTP loopback development. Origins with credentials, paths, queries
+or fragments are rejected; redirects are refused.
+
+Each invocation registers a random 15-minute, origin-bound bearer and stores
+only its SHA-256 hash. The Worker proves access through an authenticated status
+request before the first operation and rechecks the complete live credential at
+each shared operation. There is no V Auth, member, cookie or legacy token fallback.
+A missing `cli_sessions` table requires an approved migration; the CLI never
+migrates automatically.
 
 ```sh
 npm run manage
@@ -122,37 +130,33 @@ rollback. Check status and retry after restoring reachability. Neon and audit
 success writes follow completed Durable Object enforcement.
 
 There is no browser moderation console. Student Report, Block and message
-withdrawal remain in the room. Moderators must check the queue deliberately;
-this change does not add an alert service. The bearer acts as one designated
-moderator, so it does not distinguish people sharing that credential. Rotate it
-when access changes.
+withdrawal remain in the room. Operators must check the queue deliberately;
+this change adds no alert service. Mutations audit `CLI session <id>`, with no
+member or named-human attribution. Report status and resolution time establish
+resolution; `resolved_by` is NULL for CLI actions. Historical actor handles and
+automatic system actions retain their meaning.
 
-## Moderator bootstrap
+Sessions refresh through database authority before an action when fewer than
+30 seconds remain. An idle menu sends no keepalive; the next action renews even
+an expired session if its row remains unrevoked. Revoked or missing rows stop the
+process. Exit and cancellation attempt bounded revocation; a crash is bounded
+by fixed expiry. Registration cleans up at most 100 rows expired or revoked at
+least seven days ago, preserving audit snapshots. Very old idle sessions may
+need restarting after cleanup.
 
-Existing designated moderator rows and credentials continue working. For a new
-moderator, first create a real local V Auth app account through the configured
-OAuth flow. With `VAUTH_SIGN_IN=on` on the Worker, visit
-`https://<your-vroom-origin>/api/operator/sign-in` in a browser and complete V Auth.
-The endpoint preserves the configured OAuth state/cookies and returns only your
-local app `userId` after the callback. It provides no moderation interface and
-grants no role. If sign-in is paused, an operator must explicitly reopen it in
-the deployment configuration to create a new account.
+No mutation is automatically replayed after a 401, timeout or partial failure.
+Inspect room status and audit before deciding whether to retry an uncertain
+action. Database and HTTP failures return fixed credential-safe messages.
 
-Using database administration credentials locally:
-
-```sh
-npm run promote -- <V-Auth-app-user-id>
-npm run promote -- --list
-npm run promote -- <V-Auth-app-user-id> --revoke
-```
-
-Promotion requires an existing app user with a `voss` OAuth account. It creates
-that user's separate moderator member if needed, assigns a unique handle and
-then grants the role. It never fabricates an auth user or accepts an email. A
-suspended role remains inert; deleted members are refused. Set the returned
-handle as the Worker's `MOD_SCRIPT_MEMBER_HANDLE`. Promotion is the out-of-band
-role-grant exception; operational moderation always uses the authenticated HTTP
-API, without a database credential on the moderation laptop.
+Migration 0005 initially reserves session registration to its owner and revokes
+PUBLIC and named-role default grants on the new table. A future INSERT grant is
+a grant of full moderation authority. Inspect inherited role membership and
+default grants before rollout. A restricted Worker role needs SELECT only on
+`cli_sessions`, no session writes, TRIGGER privilege or owner membership; other
+app tables retain their required rights. Existing shared owner credentials do
+not provide that separation. The database owner remains the trust root and can
+issue another session after revocation or bypass database guards. No role or
+credential deployment is part of this change.
 
 ## Contributing
 

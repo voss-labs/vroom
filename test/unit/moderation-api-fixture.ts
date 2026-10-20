@@ -4,6 +4,7 @@ import type { MemberRecord } from "~/db/queries/members";
 
 const mocks = vi.hoisted(() => ({
   findMemberByPseudonym: vi.fn(),
+  findLiveCliSession: vi.fn(),
   findMemberById: vi.fn(),
   listAccounts: vi.fn(),
   countAccounts: vi.fn(),
@@ -22,6 +23,10 @@ const mocks = vi.hoisted(() => ({
   suspend: vi.fn(),
   restore: vi.fn(),
   deleteMessage: vi.fn(),
+}));
+
+vi.mock("~/db/queries/cli-sessions", () => ({
+  findLiveCliSession: mocks.findLiveCliSession,
 }));
 
 vi.mock("~/db/queries/members", () => ({
@@ -69,6 +74,8 @@ const { action } = await import("~/routes/api.mod.$action");
 const { ROOM_IDS } = await import("~/lib/rooms");
 const { MOD_INTENTS } = await import("~/lib/moderation.server");
 const ACTIONS = ["reports", "accounts", "audit", "status", ...MOD_INTENTS];
+const TOKEN = "a".repeat(43);
+const SESSION_ID = "10000000-0000-4000-8000-000000000001";
 const DATE = new Date("2026-01-01T00:00:00Z");
 
 function member(overrides: Partial<MemberRecord> = {}): MemberRecord {
@@ -88,7 +95,7 @@ function member(overrides: Partial<MemberRecord> = {}): MemberRecord {
 function call(
   intent: string,
   body: unknown = {},
-  token: string | null = process.env.MOD_SCRIPT_TOKEN!,
+  token: string | null = TOKEN,
 ) {
   const headers = new Headers({ "content-type": "application/json" });
   if (token !== null) headers.set("authorization", `Bearer ${token}`);
@@ -105,8 +112,8 @@ function call(
 
 beforeEach(() => {
   vi.resetAllMocks();
-  process.env.MOD_SCRIPT_TOKEN = "testing-script-credential";
-  process.env.MOD_SCRIPT_MEMBER_HANDLE = "quiet-ibex";
+  process.env.VAUTH_SIGN_IN = "off";
+  mocks.findLiveCliSession.mockResolvedValue({ id: SESSION_ID });
   mocks.findMemberByPseudonym.mockResolvedValue(member());
   mocks.findMemberById.mockResolvedValue(member());
   mocks.checkScriptAuth.mockResolvedValue({ allowed: true, retryAfter: 0 });
@@ -141,4 +148,4 @@ export async function payload(response: Response): Promise<{
   };
 }
 
-export { mocks, call, member, DATE, ROOM_IDS, ACTIONS };
+export { mocks, call, member, DATE, ROOM_IDS, ACTIONS, TOKEN, SESSION_ID };

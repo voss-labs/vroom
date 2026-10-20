@@ -168,11 +168,7 @@ describe("report-bound suspension", () => {
     expect((await call("delete_message", { reportId: "r1" })).status).toBe(200);
     expect(mocks.deleteMessage).toHaveBeenCalledWith("legacy-message");
     expect((await call("dismiss_report", { reportId: "r1" })).status).toBe(200);
-    expect(mocks.setReportStatus).toHaveBeenCalledWith(
-      "r1",
-      "dismissed",
-      "actor",
-    );
+    expect(mocks.setReportStatus).toHaveBeenCalledWith("r1", "dismissed", null);
   });
 
   it("keeps standalone account suspension available", async () => {
@@ -208,13 +204,11 @@ describe("report-bound suspension", () => {
 
   it("retains authorization for every action against accountless evidence", async () => {
     mocks.findReport.mockResolvedValue(storedReport());
-    mocks.findMemberByPseudonym.mockResolvedValue(
-      member({ suspendedAt: DATE }),
-    );
+    mocks.findLiveCliSession.mockResolvedValue(null);
     for (const action of ["delete_message", "dismiss_report", "suspend"]) {
       expect(
         (await call(action, { handle: "grumpy-heron", reportId: "r1" })).status,
-      ).toBe(403);
+      ).toBe(401);
     }
     expect(mocks.findReport).not.toHaveBeenCalled();
     expect(mocks.deleteMessage).not.toHaveBeenCalled();

@@ -113,3 +113,21 @@ any pending migrations in order. Use db:migrate, never drizzle-kit push on data.
   BEFORE triggers can stamp and reject row attributes.
 - [OWASP session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html):
   opaque random credentials and server-side expiry; 15 minutes is our design choice.
+
+
+## Implementation notes
+
+Implemented 2026-10-20. Migration 0005 supports migration-only and schema-first
+empty setup, reserves initial issuance to its owner by removing PUBLIC and named
+default grants, and database-stamps fixed lifetime and one-way revocation. Shared
+operations requery full live credentials before target lookups and enforcement.
+The CLI registers/proves/renews/revokes bounded sessions through the installed
+Neon HTTP driver, and no mutation is automatically replayed after failure.
+Session audit snapshots survive credential cleanup; CLI report resolution uses
+NULL resolved_by with canonical status/time and linked session audit.
+
+Verification: 539 unit/Worker tests passed with two existing skips; 37 isolated
+local PostgreSQL tests passed; typecheck, format check and production build passed.
+Local PostgreSQL uses synthetic fixtures and does not prove Neon or production
+rollout. Historical auth tables remain. No production migration, deployment or
+runtime-role separation was performed. Independent review and QA follow.

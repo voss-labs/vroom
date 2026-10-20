@@ -7,6 +7,10 @@ import type {
   ReportsView,
   StatusView,
 } from "../app/lib/moderation-contract";
+import { CliError } from "./mod-errors";
+import type { SessionConfig } from "./mod-session";
+
+export { CliError, safeError } from "./mod-errors";
 
 interface ModData {
   reports: ReportsView;
@@ -27,7 +31,9 @@ export type ModClient = <A extends ModAction>(
 
 interface ClientConfig {
   origin: string;
-  token: string;
+  token: string | (() => Promise<string>);
+  unauthorized?: () => Promise<void>;
+  signal?: AbortSignal;
 }
 
 interface RoomOutcome {
@@ -35,21 +41,11 @@ interface RoomOutcome {
   reachable: boolean;
 }
 
-export class CliError extends Error {
-  constructor(
-    message: string,
-    readonly partial = false,
-    readonly rooms: RoomOutcome[] = [],
-  ) {
-    super(message);
-    this.name = "CliError";
-  }
-}
-
 const ERROR_MESSAGES: Record<string, string> = {
-  bad_token: "Authentication failed. Check MOD_SCRIPT_TOKEN.",
-  not_moderator: "The designated account is not an active V Auth moderator.",
-  suspended: "The designated moderator is suspended.",
+  bad_token:
+    "Authentication failed. Retry after session renewal. The action was not replayed.",
+  moderation_auth_unavailable:
+    "The server could not verify the CLI session. Retry later.",
   bad_request: "The server rejected the request. Check its fields.",
   rate_limited: "Too many failed authentication attempts. Wait and retry.",
   report_not_found: "The report no longer exists.",
@@ -65,13 +61,21 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 export function readConfig(
   env: Record<string, string | undefined>,
-): ClientConfig {
+): SessionConfig {
   const origin = env.VROOMS_ORIGIN;
-  const token = env.MOD_SCRIPT_TOKEN;
+  const databaseUrl = env.DATABASE_URL;
   if (!origin) throw new CliError("VROOMS_ORIGIN is not set.");
-  if (!token) throw new CliError("MOD_SCRIPT_TOKEN is not set.");
-  if (!/^[^\s\u0000-\u001f\u007f]+$/.test(token)) {
-    throw new CliError("MOD_SCRIPT_TOKEN has an invalid format.");
+  if (!databaseUrl) throw new CliError("DATABASE_URL is not set.");
+  try {
+    const database = new URL(databaseUrl);
+    if (
+      !["postgres:", "postgresql:"].includes(database.protocol) ||
+      !database.hostname
+    ) {
+      throw new Error();
+    }
+  } catch {
+    throw new CliError("DATABASE_URL has an invalid format.");
   }
   let url: URL;
   try {
@@ -95,7 +99,7 @@ export function readConfig(
   if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
     throw new CliError("VROOMS_ORIGIN requires HTTPS except on loopback.");
   }
-  return { origin: url.origin, token };
+  return { origin: url.origin, databaseUrl };
 }
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -134,38 +138,49 @@ export function createModClient(
     action: A,
     body: Record<string, unknown> = {},
   ): Promise<ModData[A]> => {
+    const token =
+      typeof config.token === "string" ? config.token : await config.token();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const signal = config.signal
+      ? AbortSignal.any([controller.signal, config.signal])
+      : controller.signal;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error());
+      }, timeoutMs);
+    });
+    let result: { response: Response; payload: unknown };
     try {
-      const response = await request(
-        new URL(`/api/mod/${action}`, config.origin),
-        {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${config.token}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify(body),
-          redirect: "error",
-          signal: controller.signal,
-        },
-      );
-      if (
-        response.redirected ||
-        (response.status >= 300 && response.status < 400)
-      ) {
-        throw new CliError(
-          "The server redirected the request. No redirect was followed.",
-        );
-      }
-      const payload: unknown = await response.json().catch(() => null);
-      if (!response.ok || (object(payload) && "error" in payload)) {
-        throw failure(payload, response.status, config.token);
-      }
-      if (!object(payload) || !object(payload.data)) {
-        throw new CliError("The server returned an invalid response.");
-      }
-      return payload.data as unknown as ModData[A];
+      result = await Promise.race([
+        (async () => {
+          const response = await request(
+            new URL(`/api/mod/${action}`, config.origin),
+            {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${token}`,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify(body),
+              redirect: "error",
+              signal,
+            },
+          );
+          if (
+            response.redirected ||
+            (response.status >= 300 && response.status < 400)
+          ) {
+            throw new CliError(
+              "The server redirected the request. No redirect was followed.",
+            );
+          }
+          const payload: unknown = await response.json().catch(() => null);
+          return { response, payload };
+        })(),
+        timeout,
+      ]);
     } catch (error) {
       if (error instanceof CliError) throw error;
       throw new CliError(
@@ -176,21 +191,15 @@ export function createModClient(
     } finally {
       clearTimeout(timer);
     }
+    const { response, payload } = result;
+    if (!response.ok || (object(payload) && "error" in payload)) {
+      if (response.status === 401 && config.unauthorized)
+        await config.unauthorized();
+      throw failure(payload, response.status, token);
+    }
+    if (!object(payload) || !object(payload.data)) {
+      throw new CliError("The server returned an invalid response.");
+    }
+    return payload.data as unknown as ModData[A];
   };
-}
-
-export function safeError(error: unknown): string {
-  if (!(error instanceof CliError)) return "Moderation could not be completed.";
-  const lines = [error.message];
-  if (error.partial) {
-    lines.push(
-      "Enforcement may already have happened in some rooms. No rollback was performed. Check room status before retrying.",
-    );
-  }
-  for (const room of error.rooms) {
-    lines.push(
-      `${room.roomId}: ${room.reachable ? "reachable; enforcement succeeded" : "unreachable; enforcement unconfirmed"}`,
-    );
-  }
-  return lines.join("\n");
 }

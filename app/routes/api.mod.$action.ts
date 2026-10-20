@@ -1,6 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
 
-import { findMemberByPseudonym } from "~/db/queries/members";
 import { authenticateScript } from "~/lib/moderation-auth.server";
 import type { ModError } from "~/lib/moderation-contract";
 import { isModReadAction, readModeration } from "~/lib/moderation-read.server";
@@ -70,23 +69,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return fail("bad_request", "Reason must be text.", 400);
     }
 
-    let memberId: string | null = null;
-    if (intent === "suspend" || intent === "restore") {
-      if (typeof body.handle !== "string" || !body.handle) {
-        return fail("bad_request", "A handle is required.", 400);
-      }
-      const target = await findMemberByPseudonym(body.handle);
-      const reportBound =
-        intent === "suspend" &&
-        typeof body.reportId === "string" &&
-        body.reportId.length > 0;
-      if (!target && !reportBound)
-        return fail("member_not_found", "No such handle.", 404);
-      memberId = target?.id ?? null;
+    if (
+      (intent === "suspend" || intent === "restore") &&
+      (typeof body.handle !== "string" || !body.handle)
+    ) {
+      return fail("bad_request", "A handle is required.", 400);
     }
     const fields: ModFields = {
       reportId: typeof body.reportId === "string" ? body.reportId : null,
-      memberId,
+      handle: typeof body.handle === "string" ? body.handle : undefined,
       reason: typeof body.reason === "string" ? body.reason : null,
       killed: body.killed === true,
     };

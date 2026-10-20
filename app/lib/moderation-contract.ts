@@ -35,6 +35,7 @@ export interface AuditItem {
   id: string;
   action: string;
   actorHandle: string | null;
+  actorSessionId: string | null;
   actorKind: string;
   targetType: string;
   targetId: string | null;

@@ -18,9 +18,6 @@ declare namespace Cloudflare {
     DEVICE_SESSION_SECRET: string;
     VAUTH_CLIENT_ID: string;
     VAUTH_CLIENT_SECRET: string;
-    MOD_SCRIPT_TOKEN: string;
-    /** The handle of the members row the script front door acts as (VRIP-08). */
-    MOD_SCRIPT_MEMBER_HANDLE: string;
   }
 }
 
@@ -34,8 +31,6 @@ declare namespace NodeJS {
     DEVICE_SESSION_SECRET: string;
     VAUTH_CLIENT_ID: string;
     VAUTH_CLIENT_SECRET: string;
-    MOD_SCRIPT_TOKEN: string;
-    MOD_SCRIPT_MEMBER_HANDLE: string;
     /** Used only by scripts/mod.ts, which runs on a laptop rather than the Worker. */
     VROOMS_ORIGIN: string;
   }
