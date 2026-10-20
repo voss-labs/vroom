@@ -143,3 +143,27 @@ action, `identity.server.ts` and the reveal dialog are removed.
   edit.
 - `AGENTS.md` hard constraints that name the mapping or reveal (the users-table
   mapping rule and the reveal CHECK) need rewording in the same change.
+
+## Public identity correction (2026-10-19)
+
+The original shared resolver preferred a V Auth session over a device cookie.
+That let two browsers with the same V Auth session become one public actor, and
+a V Auth-only browser bypass device-key creation. Public student routes now
+resolve device sessions only; missing or invalid device cookies never fall back
+to V Auth. This corrects the implementation to the anonymity model above.
+
+VRIP-16 removes the browser moderation console. Accountable moderator rows and
+script authorization remain. `/api/operator/sign-in` reuses the configured OAuth
+flow solely to establish a real local V Auth app user and return its app ID.
+Out-of-band promotion explicitly provisions the separate member and handle; it
+never attaches a student's device key to an auth account.
+
+- The persistent identity boundary is one browser profile on this origin, not
+  a physical device or a person. Tabs and reloads share an IndexedDB key. An
+  expired or deleted session cookie is renewed by signing a fresh challenge
+  with the retained key. The existing cookie lasts thirty days and is HttpOnly,
+  SameSite=Lax and Secure on HTTPS; no session bearer is written to web storage.
+- First key creation generates a candidate before opening a readwrite
+  transaction. That transaction re-reads the identity and keeps an existing key
+  or inserts the candidate, settling only on commit. Concurrent tabs receive the
+  same retained winner. Storage failures abort entry without a default identity.

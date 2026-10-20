@@ -7,33 +7,16 @@ import { findReport, setReportStatus } from "~/db/queries/reports";
 import { writeAudit } from "~/db/queries/audit";
 import { getRoom, RoomUnreachable, type RoomStub } from "~/lib/room.server";
 import { ROOM_IDS, isRoomId, type RoomId } from "~/lib/rooms";
-import { ModerationError, assertModerator } from "~/lib/require-role.server";
+import { ModerationError } from "~/lib/require-role.server";
+import { requireCurrentModerator } from "~/lib/moderation-actor.server";
+import type { ModIntent, ModResult } from "~/lib/moderation-contract";
 
-/**
- * Every moderator action, for both front doors (VRIP-08).
- *
- * Ordering is not incidental. Enforcement state — kill switch, suspensions,
- * message deletion — lives in the Durable Object and is written FIRST; the Neon
- * record and the audit row are written second. An enforcement that happened
- * without an audit row is a gap in the record; an audit row for an enforcement
- * that never happened is a lie in the record, and the audit trail is worth more
- * when its rows are true than when they are complete.
- *
- * There is no `reveal`. Students are device keys with nothing behind them, so
- * there is no identity to resolve (VRIP-13).
- */
+export type { ModIntent, ModResult } from "~/lib/moderation-contract";
 
 export interface ModActor {
   member: MemberRecord;
   kind: "console" | "script";
 }
-
-export type ModIntent =
-  | "delete_message"
-  | "suspend"
-  | "restore"
-  | "dismiss_report"
-  | "set_room_state";
 
 export const MOD_INTENTS: readonly ModIntent[] = [
   "delete_message",
@@ -57,19 +40,22 @@ export interface ModFields {
   killed?: boolean;
 }
 
-export type ModResult =
-  | { intent: "set_room_state"; killed: boolean; at: number }
-  | { intent: Exclude<ModIntent, "set_room_state">; ok: true };
+export class PartialModerationError extends ModerationError {
+  readonly partial = true;
 
-/**
- * Any failure to reach or command the object is `room_unreachable`. That is the
- * correct behaviour rather than a nuisance: a suspension that only exists in
- * Neon would show as applied in the console while the account kept posting.
- */
+  constructor(readonly rooms: Array<{ roomId: string; reachable: boolean }>) {
+    super(
+      "room_unreachable",
+      "Some rooms could not be updated. Enforcement may already have happened in other rooms.",
+      503,
+    );
+  }
+}
+
 function unreachable(error: unknown): never {
   if (error instanceof ModerationError) throw error;
   if (!(error instanceof RoomUnreachable)) {
-    console.error("[moderation] durable object call failed:", error);
+    console.error("[moderation] durable object call failed");
   }
   throw new ModerationError(
     "room_unreachable",
@@ -86,17 +72,21 @@ async function room(roomId: RoomId) {
   }
 }
 
-/**
- * Suspension and the kill switch apply to every room, all or nothing (VRIP-12).
- * A handle silenced in four rooms and still posting in the fifth is not
- * suspended, so one unreachable room fails the action before any Neon write.
- */
 async function everyRoom<T>(fn: (room: RoomStub) => Promise<T>): Promise<T[]> {
-  try {
-    return await Promise.all(ROOM_IDS.map(async (id) => fn(await room(id))));
-  } catch (error) {
-    unreachable(error);
+  const outcomes = await Promise.allSettled(
+    ROOM_IDS.map(async (id) => fn(await room(id))),
+  );
+  if (outcomes.some((outcome) => outcome.status === "rejected")) {
+    throw new PartialModerationError(
+      ROOM_IDS.map((roomId, index) => ({
+        roomId,
+        reachable: outcomes[index].status === "fulfilled",
+      })),
+    );
   }
+  return outcomes.map(
+    (outcome) => (outcome as PromiseFulfilledResult<T>).value,
+  );
 }
 
 async function requireReport(reportId: string | null | undefined) {
@@ -127,16 +117,12 @@ async function requireMember(memberId: string | null | undefined) {
   return member;
 }
 
-/**
- * The single entry point. The role is re-checked here, so the console route and
- * the script route cannot diverge on whether they checked.
- */
 export async function performModeration(
   actor: ModActor,
   intent: ModIntent,
   fields: ModFields,
 ): Promise<ModResult> {
-  assertModerator(actor.member);
+  actor = await requireCurrentModerator(actor);
 
   switch (intent) {
     case "delete_message":
@@ -193,8 +179,6 @@ async function suspend(actor: ModActor, fields: ModFields): Promise<ModResult> {
       400,
     );
   }
-
-  // Enforcement first: this closes their open sockets with 4003.
   await everyRoom((stub) => stub.suspend(handle));
 
   await setSuspended(member.id, true, fields.reason ?? null);
@@ -237,7 +221,6 @@ async function restore(actor: ModActor, fields: ModFields): Promise<ModResult> {
   return { intent: "restore", ok: true };
 }
 
-/** The one action with no Durable Object leg: nothing a student can do changes. */
 async function dismissReport(
   actor: ModActor,
   fields: ModFields,
@@ -271,12 +254,9 @@ async function setRoomState(
   fields: ModFields,
 ): Promise<ModResult> {
   const killed = fields.killed === true;
-  const by = actor.member.pseudonym ?? actor.member.id;
+  const by = actor.member.pseudonym ?? "moderator";
   const results = await everyRoom((stub) => stub.setKilled(killed, by));
   const at = Math.max(...results.map((result) => result.at));
-
-  // The reason is why this row exists. `npm run mod -- close "<why>"` documents
-  // the argument, and the room is closed under more pressure than anything else.
   await writeAudit({
     action: killed ? "room_close" : "room_open",
     actorMemberId: actor.member.id,

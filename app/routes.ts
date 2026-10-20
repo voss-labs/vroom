@@ -4,9 +4,8 @@ export default [
   index("routes/home.tsx"),
   route("room", "routes/room.index.tsx"),
   route("room/:roomId", "routes/room.tsx"),
-  // Not rendered for a student, and every action re-checks the role server-side.
-  route("mod", "routes/mod.tsx"),
 
+  route("api/operator/sign-in", "routes/api.operator.sign-in.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   // Student sign-in by device key (VRIP-13).
   route("api/device/challenge", "routes/api.device.challenge.ts"),

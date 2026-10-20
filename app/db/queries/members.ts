@@ -172,16 +172,10 @@ export async function setSuspended(
   return rows[0] ?? null;
 }
 
-export async function countSuspended(): Promise<number> {
-  const rows = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(members)
-    .where(and(isNotNull(members.suspendedAt), isNull(members.deletedAt)));
-  return rows[0]?.n ?? 0;
-}
-
-/** The console's accounts table. Handles only — there is no email here by design. */
-export async function listAccounts(): Promise<
+export async function listAccounts(
+  page = 0,
+  pageSize = 25,
+): Promise<
   Array<{
     id: string;
     handle: string;
@@ -198,7 +192,9 @@ export async function listAccounts(): Promise<
     })
     .from(members)
     .where(and(isNotNull(members.pseudonym), isNull(members.deletedAt)))
-    .orderBy(members.pseudonym);
+    .orderBy(members.pseudonym)
+    .limit(pageSize)
+    .offset(page * pageSize);
 
   return rows.map((r) => ({
     id: r.id,
@@ -206,4 +202,12 @@ export async function listAccounts(): Promise<
     suspended: r.suspendedAt !== null,
     suspendedReason: r.suspendedReason,
   }));
+}
+
+export async function countAccounts(): Promise<number> {
+  const rows = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(members)
+    .where(and(isNotNull(members.pseudonym), isNull(members.deletedAt)));
+  return rows[0]?.n ?? 0;
 }

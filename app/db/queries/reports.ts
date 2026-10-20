@@ -31,8 +31,7 @@ const REPORT_COLUMNS = {
   createdAt: reports.createdAt,
 } as const;
 
-/** One console page. Small enough that a moderator reads a page rather than scans it. */
-export const REPORTS_PAGE_SIZE = 50;
+export const REPORTS_PAGE_SIZE = 25;
 
 /**
  * The working queue. Open reports come first and resolved ones cannot displace
@@ -54,6 +53,7 @@ export async function listReports(
     .orderBy(
       sql`case when ${reports.status} = 'open' then 0 else 1 end`,
       desc(reports.createdAt),
+      desc(reports.id),
     )
     .limit(pageSize)
     .offset(Math.max(0, page) * pageSize);
@@ -94,14 +94,6 @@ export async function findReport(id: string): Promise<ReportView | null> {
   return rows[0] ?? null;
 }
 
-export async function countOpenReports(): Promise<number> {
-  const rows = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(reports)
-    .where(eq(reports.status, "open"));
-  return rows[0]?.n ?? 0;
-}
-
 export interface CreateReportInput {
   roomId: string;
   messageId: string;
@@ -128,46 +120,6 @@ export async function createReport(
       reporterMemberId: input.reporterMemberId,
       messageSnapshot: input.messageSnapshot,
       reason: input.reason ?? null,
-    })
-    .onConflictDoNothing()
-    .returning({ id: reports.id });
-  return rows[0] ?? null;
-}
-
-/**
- * The synthetic message id an auto-flag report carries. A blocked message was
- * never stored, so there is no Durable Object message to point at — and putting
- * the flag id here is what lets the unique index make a repeat drain a no-op.
- */
-export function autoFlagMessageId(roomId: string, flagId: number): string {
-  return `flag:${roomId}:${flagId}`;
-}
-
-export interface AutoFlagInput {
-  roomId: string;
-  flagId: number;
-  reportedMemberId: string;
-  snippet: string;
-  reason: string;
-}
-
-/**
- * Materialise one VRIP-09 flag as a report. Returns null when this flag already
- * became a report, which is the whole idempotency guarantee: the caller treats
- * null as "already drained" and skips the mirroring that follows it.
- */
-export async function createAutoFlagReport(
-  input: AutoFlagInput,
-): Promise<{ id: string } | null> {
-  const rows = await db
-    .insert(reports)
-    .values({
-      roomId: input.roomId,
-      messageId: autoFlagMessageId(input.roomId, input.flagId),
-      reportedMemberId: input.reportedMemberId,
-      reporterMemberId: null,
-      messageSnapshot: input.snippet,
-      reason: input.reason,
     })
     .onConflictDoNothing()
     .returning({ id: reports.id });

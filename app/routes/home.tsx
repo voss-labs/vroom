@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { redirect, useNavigate } from "react-router";
+import { data, redirect, useNavigate } from "react-router";
 
 import type { Route } from "./+types/home";
 import { ThemeToggle } from "~/components/ThemeToggle";
-import { signInWithVAuth } from "~/lib/auth-client";
 import {
   DeviceKeyUnavailable,
   SignInRefused,
@@ -12,8 +11,8 @@ import {
 import { resolveActor } from "~/lib/require-role.server";
 import { readRoomPulses, type RoomPulse } from "~/lib/room.server";
 import { DEFAULT_ROOM_ID, ROOM_IDS, ROOMS, type RoomId } from "~/lib/rooms";
-import { isVAuthSignInOpen } from "~/lib/sign-in.server";
 
+export const headers = () => ({ "Cache-Control": "private, no-store" });
 export function meta() {
   return [
     { title: "V Rooms" },
@@ -27,13 +26,15 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const actor = await resolveActor(request);
-  if (actor) throw redirect("/room");
+  if (actor)
+    throw redirect("/room", {
+      headers: { "Cache-Control": "private, no-store" },
+    });
   const pulses = await readRoomPulses();
-  // Only moderators use V Auth since VRIP-13, so the pause hides their link alone.
-  return {
-    moderatorSignInOpen: isVAuthSignInOpen(),
-    pulses,
-  };
+  return data(
+    { pulses },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
@@ -68,7 +69,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <p className="text-ink-2 mb-6 text-[14.5px] leading-relaxed sm:text-[15px]">
         Campus Live and four topic rooms open to every VIT student. No sign-up,
         no email, no phone number, nobody you have to already know. You get one
-        handle and keep it on this device.
+        handle and keep it in this browser.
       </p>
 
       <EnterButton targetRoom={targetRoom} />
@@ -132,10 +133,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </h2>
             <p className="text-ink-2 mb-2 text-[13px] leading-relaxed">
               Other students see a handle and nothing else, and so does VOSS.
-              This browser makes a key that never leaves it, and V Rooms stores
-              only a hash of that key. No name, no email, and no IP address are
-              kept. Cloudflare, which runs the servers, sees your IP address in
-              transit.
+              This browser makes a private key that never leaves it, and V Rooms
+              stores only a hash of that key. No name, no email, and no IP
+              address are kept. Cloudflare, which runs the servers, sees your IP
+              address in transit.
             </p>
             <p className="text-ink-2 text-[13px] leading-relaxed">
               Nobody can recover your handle. Clear this site&apos;s data or
@@ -177,8 +178,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </a>
           . The rooms that do not exist yet are open issues.
         </p>
-
-        {loaderData.moderatorSignInOpen && <ModeratorSignIn />}
       </div>
     </main>
   );
@@ -226,37 +225,6 @@ function EnterButton({ targetRoom }: { targetRoom: RoomId }) {
       </button>
       {error && (
         <p role="alert" className="text-neg mt-3 text-[13px]">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** Moderators keep V Auth so every moderation action has an accountable person (VRIP-13). */
-function ModeratorSignIn() {
-  const [error, setError] = useState<string | null>(null);
-
-  async function start() {
-    setError(null);
-    try {
-      await signInWithVAuth("/mod");
-    } catch {
-      setError("Could not reach V Auth. Try again.");
-    }
-  }
-
-  return (
-    <div>
-      <button
-        type="button"
-        className="text-ink-3 hover:text-ink-2 inline-flex min-h-11 items-center text-[12.5px] underline underline-offset-4"
-        onClick={start}
-      >
-        VOSS moderator? Sign in with V Auth
-      </button>
-      {error && (
-        <p role="alert" className="text-neg text-[12.5px]">
           {error}
         </p>
       )}

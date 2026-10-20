@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { data } from "react-router";
-
 import type { Route } from "./+types/room";
 import { Composer, type ComposerDraft } from "~/components/room/Composer";
 import { ConnectionState } from "~/components/room/ConnectionState";
@@ -28,7 +27,7 @@ import {
   type Msg,
   type SystemTone,
 } from "../../workers/protocol";
-
+export const headers = () => ({ "Cache-Control": "private, no-store" });
 export function meta({ loaderData }: Route.MetaArgs) {
   if (!loaderData) return [{ title: "V Rooms" }];
   return [
@@ -43,12 +42,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ensurePseudonym(actor.member),
     readRoomPulses(),
   ]);
-  return {
-    pseudonym: member.pseudonym ?? "",
-    isModerator: actor.member.isModerator,
-    room: ROOMS[params.roomId],
-    pulses,
-  };
+  return data(
+    {
+      pseudonym: member.pseudonym ?? "",
+      room: ROOMS[params.roomId],
+      pulses,
+    },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }
 const EMPTY: ReadonlySet<string> = new Set();
 const NONE_DELETED: ReadonlyMap<string, DeletedBy> = new Map();
@@ -320,7 +321,6 @@ function RoomView({ loaderData }: Pick<Route.ComponentProps, "loaderData">) {
         room={room}
         online={online}
         killed={killed}
-        isModerator={loaderData.isModerator}
         onOpenMembers={() => setSheetOpen(true)}
       />
 

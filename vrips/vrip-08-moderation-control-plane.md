@@ -1,6 +1,6 @@
 # VRIP-08: One moderation module, two front doors, and where enforcement lives
 
-**Status:** Accepted
+**Status:** Accepted; two-interface requirement superseded by VRIP-16
 **Date:** 2026-08-12
 **Author:** Harshal More
 

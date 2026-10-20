@@ -1,13 +1,3 @@
-/**
- * The browser half of device-key sign-in (VRIP-13).
- *
- * The key pair is generated once per browser with the private key marked
- * non-extractable, then kept in IndexedDB as a CryptoKey. Script on this origin
- * can ask it to sign but can never read it out, and the server only ever sees
- * the public key. Clearing this site's data loses the key, and with it the
- * handle, and there is no recovery: the server has nothing to recover from.
- */
-
 const DB_NAME = "v-rooms";
 const STORE = "device";
 const KEY_ID = "identity";
@@ -33,50 +23,94 @@ export class SignInRefused extends Error {
 
 function openStore(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    let abandoned = false;
     const request = indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => request.result.createObjectStore(STORE);
-    request.onsuccess = () => resolve(request.result);
+    request.onblocked = () => {
+      abandoned = true;
+      reject(new Error("Browser key storage is blocked."));
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (abandoned) {
+        db.close();
+        return;
+      }
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     request.onerror = () => reject(request.error);
   });
 }
 
-function read(db: IDBDatabase): Promise<CryptoKeyPair | undefined> {
+function validPair(value: unknown): value is CryptoKeyPair {
+  if (!value || typeof value !== "object") return false;
+  const pair = value as CryptoKeyPair;
+  return (
+    pair.privateKey instanceof CryptoKey &&
+    pair.publicKey instanceof CryptoKey &&
+    pair.privateKey.type === "private" &&
+    !pair.privateKey.extractable &&
+    pair.publicKey.type === "public" &&
+    pair.privateKey.algorithm.name === "ECDSA" &&
+    pair.publicKey.algorithm.name === "ECDSA" &&
+    (pair.privateKey.algorithm as EcKeyAlgorithm).namedCurve === "P-256" &&
+    (pair.publicKey.algorithm as EcKeyAlgorithm).namedCurve === "P-256"
+  );
+}
+
+function readOrCreate(
+  db: IDBDatabase,
+  candidate: CryptoKeyPair,
+): Promise<CryptoKeyPair> {
   return new Promise((resolve, reject) => {
-    const request = db.transaction(STORE).objectStore(STORE).get(KEY_ID);
-    request.onsuccess = () => resolve(request.result as CryptoKeyPair);
-    request.onerror = () => reject(request.error);
+    let selected: CryptoKeyPair | undefined;
+    const transaction = db.transaction(STORE, "readwrite");
+    const store = transaction.objectStore(STORE);
+    const request = store.get(KEY_ID);
+    transaction.oncomplete = () =>
+      selected
+        ? resolve(selected)
+        : reject(new Error("Browser key was not committed."));
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () =>
+      reject(
+        transaction.error ?? new Error("Browser key transaction was aborted."),
+      );
+    request.onsuccess = () => {
+      try {
+        if (request.result === undefined) {
+          selected = candidate;
+          store.add(candidate, KEY_ID);
+        } else if (validPair(request.result)) {
+          selected = request.result;
+        } else {
+          transaction.abort();
+        }
+      } catch (error) {
+        transaction.abort();
+        reject(error);
+      }
+    };
   });
 }
 
-function write(db: IDBDatabase, pair: CryptoKeyPair): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(pair, KEY_ID);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function deviceKey(): Promise<CryptoKeyPair> {
-  if (typeof indexedDB === "undefined" || !crypto?.subtle)
+export async function deviceKey(): Promise<CryptoKeyPair> {
+  if (typeof indexedDB === "undefined" || !globalThis.crypto?.subtle)
     throw new DeviceKeyUnavailable();
   try {
+    const candidate = await crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign", "verify"],
+    );
     const db = await openStore();
     try {
-      const existing = await read(db);
-      if (existing?.privateKey && existing.publicKey) return existing;
-      const pair = await crypto.subtle.generateKey(
-        { name: "ECDSA", namedCurve: "P-256" },
-        false,
-        ["sign", "verify"],
-      );
-      await write(db, pair);
-      return pair;
+      return await readOrCreate(db, candidate);
     } finally {
       db.close();
     }
   } catch (error) {
-    // Private windows in some browsers refuse IndexedDB or CryptoKey storage.
     throw new DeviceKeyUnavailable(error);
   }
 }
@@ -110,7 +144,6 @@ async function postJson(url: string, body?: unknown) {
   return payload?.data ?? {};
 }
 
-/** Signs a fresh challenge with this browser's key and opens a session cookie. */
 export async function enterWithDeviceKey(): Promise<void> {
   const pair = await deviceKey();
   const { challenge } = await postJson("/api/device/challenge");

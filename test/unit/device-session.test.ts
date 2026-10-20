@@ -40,8 +40,7 @@ const {
 const { action: openSession } = await import("~/routes/api.device.session");
 const { action: challengeRoute } =
   await import("~/routes/api.device.challenge");
-const { resolveActor, requireModerator } =
-  await import("~/lib/require-role.server");
+const { resolveActor } = await import("~/lib/require-role.server");
 
 const ORIGIN = "https://vroom.vosslabs.org";
 
@@ -311,21 +310,12 @@ describe("resolveActor", () => {
     expect(actor).toBeNull();
   });
 
-  it("prefers a moderator's V Auth session over a device cookie", async () => {
+  it("keeps a device actor when the browser also has a V Auth session", async () => {
     getSessionUser.mockResolvedValue({ id: "u1", name: "Mod" });
-    ensureMember.mockResolvedValue(
-      member({ id: "mod", userId: "u1", isModerator: true }),
-    );
+    findMemberById.mockResolvedValue(member());
     const actor = await resolveActor(withCookie(await mintDeviceSession("m1")));
-    expect(actor).toMatchObject({ kind: "vauth", member: { id: "mod" } });
-    expect(findMemberById).not.toHaveBeenCalled();
-  });
-
-  it("keeps a device-key handle out of the console even if flagged a moderator", async () => {
-    findMemberById.mockResolvedValue(member({ isModerator: true }));
-    const request = withCookie(await mintDeviceSession("m1"));
-    await expect(requireModerator(request)).rejects.toMatchObject({
-      status: 404,
-    });
+    expect(actor).toMatchObject({ kind: "device", member: { id: "m1" } });
+    expect(getSessionUser).not.toHaveBeenCalled();
+    expect(ensureMember).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 # VRIP-05: Ship a moderator console in v1, reversing the out-of-scope decision
 
-**Status:** Accepted
+**Status:** Superseded in part by VRIP-16 (browser interface); enforcement constraints remain
 **Date:** 2026-08-12
 **Author:** Harshal More
 

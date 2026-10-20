@@ -18,7 +18,10 @@ import { isRoomId } from "~/lib/rooms";
  */
 
 function fail(code: string, message: string, status: number) {
-  return Response.json({ error: { code, message } }, { status });
+  return Response.json(
+    { error: { code, message } },
+    { status, headers: { "Cache-Control": "private, no-store" } },
+  );
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -34,8 +37,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return fail("bad_request", "Expected a JSON body.", 400);
   }
   const room = body.roomId;
-  // Before the actor: resolving a V Auth session creates its member row, and
-  // a request for a room that does not exist must not write anything.
   if (!isRoomId(room)) return fail("unknown_room", "No such room.", 400);
 
   const actor = await resolveActor(request);
@@ -68,12 +69,15 @@ export async function action({ request }: ActionFunctionArgs) {
   const expiresIn = Number(process.env.APP_JWT_TTL_SECONDS) || 900;
   const token = await mintAppToken({ pseudonym, room }, expiresIn);
 
-  return Response.json({
-    data: {
-      token,
-      expiresIn,
-      pseudonym,
-      wsUrl: socketUrl(new URL(request.url).origin, room),
+  return Response.json(
+    {
+      data: {
+        token,
+        expiresIn,
+        pseudonym,
+        wsUrl: socketUrl(new URL(request.url).origin, room),
+      },
     },
-  });
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }

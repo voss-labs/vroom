@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "~/db";
@@ -54,7 +54,10 @@ export async function writeAudit(
   return rows[0];
 }
 
-export async function listAudit(limit = 100): Promise<AuditEntry[]> {
+export async function listAudit(
+  page = 0,
+  pageSize = 25,
+): Promise<AuditEntry[]> {
   return db
     .select({
       id: moderationAudit.id,
@@ -69,6 +72,12 @@ export async function listAudit(limit = 100): Promise<AuditEntry[]> {
     })
     .from(moderationAudit)
     .leftJoin(actorMember, eq(moderationAudit.actorMemberId, actorMember.id))
-    .orderBy(desc(moderationAudit.createdAt))
-    .limit(limit);
+    .orderBy(desc(moderationAudit.createdAt), desc(moderationAudit.id))
+    .limit(pageSize)
+    .offset(page * pageSize);
+}
+
+export async function countAudit(): Promise<number> {
+  const rows = await db.select({ n: count() }).from(moderationAudit);
+  return rows[0]?.n ?? 0;
 }

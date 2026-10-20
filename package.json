@@ -18,7 +18,8 @@
     "mod": "tsx scripts/mod.ts",
     "format": "prettier --write \"app/**/*.{ts,tsx,css}\" \"workers/**/*.ts\" \"scripts/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"app/**/*.{ts,tsx,css}\" \"workers/**/*.ts\" \"scripts/**/*.ts\" \"test/**/*.ts\"",
-    "promote": "tsx scripts/promote.ts"
+    "promote": "tsx scripts/promote.ts",
+    "manage": "tsx scripts/mod.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -36,6 +37,7 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@clack/prompts": "^1.8.1",
     "@cloudflare/vite-plugin": "^1.52.0",
     "@cloudflare/vitest-pool-workers": "^0.21.2",
     "@cloudflare/workers-types": "^5.20260812.1",
@@ -47,6 +49,7 @@
     "@types/ws": "^8.18.1",
     "dotenv": "^17.2.1",
     "drizzle-kit": "^0.31.10",
+    "fake-indexeddb": "^6.2.6",
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.2.2",
