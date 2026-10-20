@@ -13,7 +13,8 @@ export interface ReportView {
   snapshot: string;
   reason: string | null;
   handle: string | null;
-  reportedMemberId: string;
+  suspendHandle: string | null;
+  reportedMemberId: string | null;
   roomId: string;
   status: string;
   createdAt: Date;
@@ -24,7 +25,12 @@ const REPORT_COLUMNS = {
   messageId: reports.messageId,
   snapshot: reports.messageSnapshot,
   reason: reports.reason,
-  handle: reportedMember.pseudonym,
+  handle: sql<
+    string | null
+  >`coalesce(${reports.authorHandle}, ${reportedMember.pseudonym})`,
+  suspendHandle: sql<
+    string | null
+  >`case when ${reportedMember.deletedAt} is null then ${reportedMember.pseudonym} else null end`,
   reportedMemberId: reports.reportedMemberId,
   roomId: reports.roomId,
   status: reports.status,
@@ -49,7 +55,7 @@ export async function listReports(
   return db
     .select(REPORT_COLUMNS)
     .from(reports)
-    .innerJoin(reportedMember, eq(reports.reportedMemberId, reportedMember.id))
+    .leftJoin(reportedMember, eq(reports.reportedMemberId, reportedMember.id))
     .orderBy(
       sql`case when ${reports.status} = 'open' then 0 else 1 end`,
       desc(reports.createdAt),
@@ -88,7 +94,7 @@ export async function findReport(id: string): Promise<ReportView | null> {
   const rows = await db
     .select(REPORT_COLUMNS)
     .from(reports)
-    .innerJoin(reportedMember, eq(reports.reportedMemberId, reportedMember.id))
+    .leftJoin(reportedMember, eq(reports.reportedMemberId, reportedMember.id))
     .where(eq(reports.id, id))
     .limit(1);
   return rows[0] ?? null;
@@ -97,7 +103,8 @@ export async function findReport(id: string): Promise<ReportView | null> {
 export interface CreateReportInput {
   roomId: string;
   messageId: string;
-  reportedMemberId: string;
+  reportedMemberId: string | null;
+  authorHandle: string;
   reporterMemberId: string;
   messageSnapshot: string;
   reason?: string | null;
@@ -117,6 +124,7 @@ export async function createReport(
       roomId: input.roomId,
       messageId: input.messageId,
       reportedMemberId: input.reportedMemberId,
+      authorHandle: input.authorHandle,
       reporterMemberId: input.reporterMemberId,
       messageSnapshot: input.messageSnapshot,
       reason: input.reason ?? null,

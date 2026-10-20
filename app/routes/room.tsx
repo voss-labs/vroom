@@ -10,6 +10,7 @@ import { RoomRail } from "~/components/room/RoomRail";
 import { TopBar } from "~/components/room/TopBar";
 import { ensurePseudonym } from "~/lib/membership.server";
 import { requireSession } from "~/lib/require-role.server";
+import { reportFailureMessage, submitMessageReport } from "~/lib/report.client";
 import { readRoomPulses } from "~/lib/room.server";
 import {
   loadBlocked,
@@ -245,27 +246,18 @@ function RoomView({ loaderData }: Pick<Route.ComponentProps, "loaderData">) {
     async (msg: Msg) => {
       setReported((prev) => new Set(prev).add(msg.id));
       try {
-        const response = await fetch("/api/report", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ messageId: msg.id, roomId: room.id }),
-        });
-        if (!response.ok) throw new Error(`report ${response.status}`);
+        await submitMessageReport(msg.id, room.id);
         pushSystem(
           "join",
           "Report sent. A moderator reads every one of these.",
         );
-      } catch {
+      } catch (error) {
         setReported((prev) => {
           const next = new Set(prev);
           next.delete(msg.id);
           return next;
         });
-        pushSystem(
-          "warn",
-          "That report did not send. Try it again in a moment.",
-        );
+        pushSystem("warn", reportFailureMessage(error));
       }
     },
     [pushSystem, room.id],

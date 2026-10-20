@@ -45,6 +45,7 @@ describe("atomic policy flag query", () => {
       input.reportedMemberId,
       input.snippet,
       input.reason,
+      input.pseudonym,
       "Automatic: repeated blocked messages.",
       true,
       JSON.stringify({ handle: input.pseudonym, flagId: 7 }),
@@ -55,20 +56,20 @@ describe("atomic policy flag query", () => {
     await materializePolicyFlag(input);
     const normalized = query().sql.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      'FROM inserted_report WHERE "members"."id" = inserted_report.reported_member_id AND $7',
+      'FROM inserted_report WHERE "members"."id" = inserted_report.reported_member_id AND $8',
     );
     expect(normalized).toContain(
       "FROM inserted_report INNER JOIN suspended_member ON suspended_member.id = inserted_report.reported_member_id",
     );
     expect(normalized).toContain(
-      "SELECT 'auto_suspend', NULL, 'console', 'member', inserted_report.reported_member_id::text, inserted_report.id, $8::jsonb",
+      "SELECT 'auto_suspend', NULL, 'console', 'member', inserted_report.reported_member_id::text, inserted_report.id, $9::jsonb",
     );
     expect(normalized).toContain("SELECT id FROM inserted_report");
   });
 
   it("binds ordinary flags to a false suspension guard", async () => {
     await materializePolicyFlag({ ...input, autoSuspended: false });
-    expect(query().params[6]).toBe(false);
+    expect(query().params[7]).toBe(false);
     expect(execute).toHaveBeenCalledOnce();
   });
 

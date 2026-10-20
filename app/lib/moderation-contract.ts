@@ -15,6 +15,7 @@ export interface ReportItem {
   snapshot: string;
   reason: string | null;
   handle: string | null;
+  suspendHandle: string | null;
   roomId: string;
   status: string;
   createdAt: string;

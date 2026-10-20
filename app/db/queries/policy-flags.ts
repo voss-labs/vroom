@@ -24,9 +24,9 @@ export async function materializePolicyFlag(
   const result = await db.execute<{ id: string }>(sql`
     WITH inserted_report AS (
       INSERT INTO ${reports}
-        (room_id, message_id, reported_member_id, reporter_member_id, message_snapshot, reason)
+        (room_id, message_id, reported_member_id, reporter_member_id, message_snapshot, reason, author_handle)
       VALUES
-        (${input.roomId}, ${messageId}, ${input.reportedMemberId}, NULL, ${input.snippet}, ${input.reason})
+        (${input.roomId}, ${messageId}, ${input.reportedMemberId}, NULL, ${input.snippet}, ${input.reason}, ${input.pseudonym})
       ON CONFLICT (room_id, message_id) WHERE reporter_member_id IS NULL DO NOTHING
       RETURNING id, reported_member_id
     ), suspended_member AS (

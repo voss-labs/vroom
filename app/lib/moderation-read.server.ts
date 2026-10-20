@@ -84,6 +84,7 @@ async function reportsPage(page: number): Promise<ReportsView> {
     snapshot: report.snapshot,
     reason: report.reason,
     handle: report.handle,
+    suspendHandle: report.suspendHandle,
     roomId: report.roomId,
     status: report.status,
     createdAt: report.createdAt.toISOString(),

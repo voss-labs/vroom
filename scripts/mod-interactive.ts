@@ -79,17 +79,27 @@ async function reportActions(
     return;
   }
   const choice = answer(
-    await ui.select("Action for this report", [
-      { value: "delete", label: "Delete the reported message" },
-      ...(report.handle
-        ? [{ value: "suspend", label: `Suspend ${display(report.handle)}` }]
-        : []),
-      { value: "dismiss", label: "Dismiss the report" },
-      { value: "back", label: "Back" },
-    ]),
+    await ui.select(
+      report.suspendHandle
+        ? "Action for this report"
+        : "Action for this report (author account unavailable)",
+      [
+        { value: "delete", label: "Delete the reported message" },
+        ...(report.suspendHandle
+          ? [
+              {
+                value: "suspend",
+                label: `Suspend ${display(report.suspendHandle)}`,
+              },
+            ]
+          : []),
+        { value: "dismiss", label: "Dismiss the report" },
+        { value: "back", label: "Back" },
+      ],
+    ),
   );
   if (choice === "back") return;
-  if (choice === "suspend" && report.handle) {
+  if (choice === "suspend" && report.suspendHandle) {
     const reason = answer(
       await ui.text(
         "Suspension reason (optional, recorded in audit)",
@@ -101,11 +111,11 @@ async function reportActions(
       client,
       "suspend",
       {
-        handle: report.handle,
+        handle: report.suspendHandle,
         reportId: report.id,
         reason: reason || undefined,
       },
-      `suspend ${report.handle}; report ${report.id}`,
+      `suspend ${report.suspendHandle}; report ${report.id}`,
       reason,
     );
     return;

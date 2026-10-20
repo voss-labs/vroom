@@ -136,6 +136,7 @@ describe("moderation commands", () => {
       id: reportId,
       messageId: "expired-message",
       handle: "quiet-ibex",
+      suspendHandle: "quiet-ibex",
       roomId: "campus-live",
       status: "open",
       reason: hostile,

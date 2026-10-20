@@ -20,6 +20,9 @@ export function reportText(report: ReportItem): string {
       `Report: ${report.id}`,
       `Message: ${report.messageId}`,
       `Handle: ${report.handle ?? "unavailable"}`,
+      report.suspendHandle
+        ? `Suspension target: ${report.suspendHandle}`
+        : "Author account unavailable; suspension is not available.",
       `Room: ${report.roomId}`,
       `Status: ${report.status}`,
       `Created: ${report.createdAt}`,

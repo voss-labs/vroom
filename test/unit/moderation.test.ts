@@ -314,11 +314,9 @@ describe("error paths", () => {
       id === "m1" ? member() : null,
     );
     await expect(
-      performModeration(
-        { member: member(), kind: "console" },
-        "suspend",
-        FIELDS,
-      ),
+      performModeration({ member: member(), kind: "console" }, "suspend", {
+        memberId: "m2",
+      }),
     ).rejects.toMatchObject({ code: "member_not_found" });
   });
 
@@ -327,11 +325,9 @@ describe("error paths", () => {
       id === "m1" ? member() : member({ id: "m2", pseudonym: null }),
     );
     await expect(
-      performModeration(
-        { member: member(), kind: "console" },
-        "suspend",
-        FIELDS,
-      ),
+      performModeration({ member: member(), kind: "console" }, "suspend", {
+        memberId: "m2",
+      }),
     ).rejects.toMatchObject({ code: "member_not_found" });
   });
 

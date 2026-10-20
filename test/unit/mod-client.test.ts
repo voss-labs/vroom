@@ -69,6 +69,39 @@ describe("moderation client configuration", () => {
 });
 
 describe("moderation transport", () => {
+  it.each([
+    [
+      "report_target_unavailable",
+      "This report has no current author account to suspend. Refresh the reports.",
+    ],
+    [
+      "report_target_mismatch",
+      "The selected account does not match this report. Refresh the reports.",
+    ],
+  ])(
+    "explains %s without printing server text or credentials",
+    async (code, message) => {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          Response.json(
+            { error: { code, message: `${config.origin}?token=${token}` } },
+            { status: 409 },
+          ),
+        );
+
+      const error = await createModClient(config, fetcher)("suspend", {
+        handle: "calm-fox",
+        reportId: "report-1",
+      }).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(CliError);
+      expect(safeError(error)).toBe(message);
+      expect(safeError(error)).not.toContain(config.origin);
+      expect(safeError(error)).not.toContain(token);
+    },
+  );
+
   it("posts only the validated endpoint with bearer header and redirect rejection", async () => {
     const data = { intent: "restore", ok: true };
     const fetcher = vi

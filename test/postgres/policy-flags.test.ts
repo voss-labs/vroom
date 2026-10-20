@@ -77,6 +77,9 @@ describe("policy materialization against PostgreSQL", () => {
         suspended: true,
         updates: 1,
       });
+      expect(await runSql("SELECT author_handle FROM reports;")).toBe(
+        "quiet-ibex",
+      );
       const audit = JSON.parse(
         await runSql(
           "SELECT json_build_object('action', action, 'actorKind', actor_kind, 'details', details) FROM moderation_audit;",
