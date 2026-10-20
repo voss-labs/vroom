@@ -38,6 +38,15 @@ npm run deploy
 Deploy through `npm run deploy`, which builds before Wrangler reads the generated
 Worker configuration.
 
+The retained-message reporting repair requires migration
+`0004_retained_report_author.sql`. The authorized deployment step must apply
+`npm run db:migrate` before merging that repair: Cloudflare automatically deploys
+merged main, and the new code requires the new column. Contributors must not run
+production migrations themselves. Do not use `db:push` on an existing database.
+A code-only rollback to older report readers can hide reports without a linked
+account, even though evidence remains stored. Prefer a forward code repair; do
+not reverse nullable schema or delete reports to make an old build work.
+
 The optional PostgreSQL regression suite exercises policy-drain rollback and
 concurrent retries using the actual compiled statement. Point it only at a
 disposable local cluster with a Unix socket and TCP disabled; it creates and
@@ -98,6 +107,12 @@ pages of 25 records. Reports display retained snapshots and reasons and offer
 message deletion, suspension and dismissal; accounts support suspension and
 restoration. Interactive writes display their target and require confirmation.
 Explicit commands execute directly and remain suitable for scripts.
+
+Reports retain the message's author label and text independently of its account.
+Legacy labels such as `Local Dev` remain reportable evidence without becoming
+accounts. A report without a current linked account can still be reviewed,
+deleted or dismissed; the CLI explains why suspension is unavailable. Only a
+real linked member can be suspended from a report.
 
 Reports drain automatic policy flags before reading the stored queue. If a room
 cannot be drained, the queue remains readable with an incomplete-drain warning.

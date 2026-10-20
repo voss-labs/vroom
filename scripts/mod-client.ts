@@ -53,6 +53,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   bad_request: "The server rejected the request. Check its fields.",
   rate_limited: "Too many failed authentication attempts. Wait and retry.",
   report_not_found: "The report no longer exists.",
+  report_target_unavailable:
+    "This report has no current author account to suspend. Refresh the reports.",
+  report_target_mismatch:
+    "The selected account does not match this report. Refresh the reports.",
   member_not_found: "No account exists for that handle.",
   already_resolved: "The report is already closed. Refresh the reports.",
   room_unreachable: "One or more rooms could not be reached.",

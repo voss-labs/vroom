@@ -7,6 +7,7 @@ import {
   index,
   unique,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
 
 import { members } from "./members";
@@ -27,9 +28,10 @@ export const reports = pgTable(
     roomId: text("room_id").notNull().default("campus-live"),
     // The DO SQLite message id. No FK: it lives in a different store.
     messageId: text("message_id").notNull(),
-    reportedMemberId: uuid("reported_member_id")
-      .notNull()
-      .references(() => members.id, { onDelete: "cascade" }),
+    reportedMemberId: uuid("reported_member_id").references(() => members.id, {
+      onDelete: "set null",
+    }),
+    authorHandle: text("author_handle"),
     // Null for an auto-flag. See the note above.
     reporterMemberId: uuid("reporter_member_id").references(() => members.id, {
       onDelete: "cascade",
@@ -55,6 +57,10 @@ export const reports = pgTable(
       .on(t.roomId, t.messageId)
       .where(sql`reporter_member_id is null`),
     index("reports_status_created_idx").on(t.status, t.createdAt),
+    check(
+      "reports_retained_author",
+      sql`${t.reportedMemberId} is not null or coalesce(${t.authorHandle} ~ '[^[:space:]]', false)`,
+    ),
   ],
 );
 

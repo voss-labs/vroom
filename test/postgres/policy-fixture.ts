@@ -107,7 +107,7 @@ export const fixtureSql = `
   CREATE TABLE reports (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), room_id text NOT NULL, message_id text NOT NULL,
     reported_member_id uuid NOT NULL REFERENCES members(id), reporter_member_id uuid,
-    message_snapshot text NOT NULL, reason text
+    message_snapshot text NOT NULL, reason text, author_handle text
   );
   CREATE UNIQUE INDEX reports_auto_flag_uniq ON reports(room_id, message_id) WHERE reporter_member_id IS NULL;
   CREATE TABLE moderation_audit (

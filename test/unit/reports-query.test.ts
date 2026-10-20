@@ -30,8 +30,14 @@ vi.mock("~/db", async () => {
   return { db, getDb: () => db, schema };
 });
 
-const { listReports, countReports, countRecentReportsBy, REPORTS_PAGE_SIZE } =
-  await import("~/db/queries/reports");
+const {
+  listReports,
+  findReport,
+  createReport,
+  countReports,
+  countRecentReportsBy,
+  REPORTS_PAGE_SIZE,
+} = await import("~/db/queries/reports");
 
 function lastSql(): string {
   return seen[seen.length - 1].sql.toLowerCase();
@@ -44,6 +50,7 @@ function reportRow(id: string, status: string, createdAt: Date): unknown[] {
     `msg-${id}`,
     `body of ${id}`,
     null,
+    "grumpy-heron",
     "grumpy-heron",
     "m2",
     "campus-live",
@@ -58,6 +65,53 @@ beforeEach(() => {
 });
 
 describe("the working queue", () => {
+  it("keeps retained evidence visible without a linked author account", async () => {
+    answer = [
+      [
+        "legacy-report",
+        "legacy-message",
+        "retained evidence",
+        null,
+        "Local Dev",
+        null,
+        null,
+        "hostel",
+        "open",
+        new Date("2026-10-20T00:00:00Z"),
+      ],
+    ];
+    const queue = await listReports();
+    expect(queue[0]).toMatchObject({
+      handle: "Local Dev",
+      suspendHandle: null,
+      reportedMemberId: null,
+    });
+    expect(lastSql()).toContain("left join");
+    expect(lastSql()).toContain("author_handle");
+    expect(lastSql()).toContain("coalesce");
+    expect(lastSql()).toContain("deleted_at");
+    seen.length = 0;
+    expect(await findReport("legacy-report")).toMatchObject({
+      handle: "Local Dev",
+      suspendHandle: null,
+      reportedMemberId: null,
+    });
+    expect(lastSql()).toContain("left join");
+  });
+
+  it("inserts retained author evidence with a null account target", async () => {
+    await createReport({
+      roomId: "hostel",
+      messageId: "legacy-message",
+      reportedMemberId: null,
+      reporterMemberId: "reporter",
+      authorHandle: "Local Dev",
+      messageSnapshot: "retained evidence",
+    });
+    expect(lastSql()).toContain("author_handle");
+    expect(seen[0].params).toContain("Local Dev");
+    expect(seen[0].params).toContain(null);
+  });
   it("asks for open reports first, so a resolved one cannot displace them", async () => {
     await listReports();
     const sql = lastSql();

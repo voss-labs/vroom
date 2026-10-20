@@ -76,8 +76,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
         return fail("bad_request", "A handle is required.", 400);
       }
       const target = await findMemberByPseudonym(body.handle);
-      if (!target) return fail("member_not_found", "No such handle.", 404);
-      memberId = target.id;
+      const reportBound =
+        intent === "suspend" &&
+        typeof body.reportId === "string" &&
+        body.reportId.length > 0;
+      if (!target && !reportBound)
+        return fail("member_not_found", "No such handle.", 404);
+      memberId = target?.id ?? null;
     }
     const fields: ModFields = {
       reportId: typeof body.reportId === "string" ? body.reportId : null,

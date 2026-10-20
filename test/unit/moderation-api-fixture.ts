@@ -127,6 +127,7 @@ beforeEach(() => {
     id: "r1",
     roomId: "hostel",
     messageId: "expired",
+    reportedMemberId: "target",
   });
 });
 

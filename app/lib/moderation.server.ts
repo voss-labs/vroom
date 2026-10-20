@@ -170,7 +170,9 @@ async function deleteMessage(
 }
 
 async function suspend(actor: ModActor, fields: ModFields): Promise<ModResult> {
-  const member = await requireMember(fields.memberId);
+  const member = fields.reportId
+    ? await requireReportTarget(fields.reportId, fields.memberId)
+    : await requireMember(fields.memberId);
   const handle = member.pseudonym;
   if (!handle) {
     throw new ModerationError(
@@ -194,6 +196,31 @@ async function suspend(actor: ModActor, fields: ModFields): Promise<ModResult> {
     details: { handle: member.pseudonym, reason: fields.reason ?? null },
   });
   return { intent: "suspend", ok: true };
+}
+
+async function requireReportTarget(
+  reportId: string,
+  selectedId: string | null | undefined,
+): Promise<MemberRecord> {
+  const report = await requireReport(reportId);
+  const member = report.reportedMemberId
+    ? await findMemberById(report.reportedMemberId)
+    : null;
+  if (!member || member.deletedAt !== null || !member.pseudonym) {
+    throw new ModerationError(
+      "report_target_unavailable",
+      "That report has no current account to suspend.",
+      409,
+    );
+  }
+  if (member.id !== selectedId) {
+    throw new ModerationError(
+      "report_target_mismatch",
+      "That account is not the report's linked target.",
+      409,
+    );
+  }
+  return member;
 }
 
 async function restore(actor: ModActor, fields: ModFields): Promise<ModResult> {
