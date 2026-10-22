@@ -46,9 +46,6 @@
   // The registered production callback is https://vroom.vosslabs.org/... so the
   // Worker must answer on that hostname or the OAuth redirect_uri will not match.
   "routes": [{ "pattern": "vroom.vosslabs.org", "custom_domain": true }],
-  // MOD_SCRIPT_MEMBER_HANDLE is set with `wrangler secret put`, not here: a var
-  // makes `wrangler types` narrow it to a literal, which then fights every test
-  // that uses a different handle. worker-secrets.d.ts types it as string.
   "vars": {
     "BETTER_AUTH_URL": "https://vroom.vosslabs.org",
     "VROOMS_ORIGIN": "https://vroom.vosslabs.org",

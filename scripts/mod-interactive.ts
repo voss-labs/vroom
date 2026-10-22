@@ -3,7 +3,7 @@ import type {
   Page,
   ReportItem,
 } from "../app/lib/moderation-contract";
-import { safeError, type ModClient } from "./mod-client";
+import { CliError, safeError, type ModClient } from "./mod-client";
 import { reasonError } from "./mod-input";
 import {
   accountText,
@@ -313,6 +313,7 @@ export async function runInteractive(
         }
       } catch (error) {
         if (error instanceof Cancelled) throw error;
+        if (error instanceof CliError && error.fatal) throw error;
         ui.error(safeError(error));
       }
     }

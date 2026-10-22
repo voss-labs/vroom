@@ -230,6 +230,7 @@ describe("interactive moderation", () => {
           id: "audit-1",
           action: "suspend",
           actorHandle: "quiet-ibex",
+          actorSessionId: null,
           actorKind: "console",
           targetType: "member",
           targetId: "legacy-id",

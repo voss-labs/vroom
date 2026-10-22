@@ -18,7 +18,6 @@
     "mod": "tsx scripts/mod.ts",
     "format": "prettier --write \"app/**/*.{ts,tsx,css}\" \"workers/**/*.ts\" \"scripts/**/*.ts\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"app/**/*.{ts,tsx,css}\" \"workers/**/*.ts\" \"scripts/**/*.ts\" \"test/**/*.ts\"",
-    "promote": "tsx scripts/promote.ts",
     "manage": "tsx scripts/mod.ts"
   },
   "dependencies": {

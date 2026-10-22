@@ -6,7 +6,8 @@ import {
   safeError,
 } from "../../scripts/mod-client";
 
-const token = "test-credential-do-not-print";
+const token = "a".repeat(43);
+const databaseUrl = "postgresql://operator:test-password@db.example.test/rooms";
 const config = { origin: "https://rooms.example.test", token };
 
 afterEach(() => vi.useRealTimers());
@@ -20,10 +21,10 @@ describe("moderation client configuration", () => {
     "http://[::1]:5173",
   ])("accepts a root HTTPS or loopback origin: %s", (origin) => {
     expect(
-      readConfig({ VROOMS_ORIGIN: origin, MOD_SCRIPT_TOKEN: token }),
+      readConfig({ VROOMS_ORIGIN: origin, DATABASE_URL: databaseUrl }),
     ).toEqual({
       origin: new URL(origin).origin,
-      token,
+      databaseUrl,
     });
   });
 
@@ -45,7 +46,7 @@ describe("moderation client configuration", () => {
   ])("rejects unsafe configuration without echoing it: %s", (origin) => {
     let error: unknown;
     try {
-      readConfig({ VROOMS_ORIGIN: origin, MOD_SCRIPT_TOKEN: token });
+      readConfig({ VROOMS_ORIGIN: origin, DATABASE_URL: databaseUrl });
     } catch (caught) {
       error = caught;
     }
@@ -54,15 +55,15 @@ describe("moderation client configuration", () => {
     expect(safeError(error)).not.toContain(token);
   });
 
-  it("requires environment credentials and rejects header controls", () => {
+  it("requires database credentials and rejects malformed URLs", () => {
     expect(() => readConfig({})).toThrow("VROOMS_ORIGIN is not set");
     expect(() => readConfig({ VROOMS_ORIGIN: config.origin })).toThrow(
-      "MOD_SCRIPT_TOKEN is not set",
+      "DATABASE_URL is not set",
     );
     expect(() =>
       readConfig({
         VROOMS_ORIGIN: config.origin,
-        MOD_SCRIPT_TOKEN: `${token}\n`,
+        DATABASE_URL: "not a database URL",
       }),
     ).toThrow("invalid format");
   });

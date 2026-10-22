@@ -5,7 +5,6 @@ export default [
   route("room", "routes/room.index.tsx"),
   route("room/:roomId", "routes/room.tsx"),
 
-  route("api/operator/sign-in", "routes/api.operator.sign-in.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   // Student sign-in by device key (VRIP-13).
   route("api/device/challenge", "routes/api.device.challenge.ts"),

@@ -1,7 +1,10 @@
 import { countAccounts, listAccounts } from "~/db/queries/members";
 import { countReports, listReports } from "~/db/queries/reports";
 import { countAudit, listAudit } from "~/db/queries/audit";
-import { requireCurrentModerator } from "~/lib/moderation-actor.server";
+import {
+  CLI_SESSION_ID,
+  requireCurrentModerator,
+} from "~/lib/moderation-actor.server";
 import type { ModActor } from "~/lib/moderation.server";
 import { MOD_PAGE_SIZE, MOD_MAX_PAGE } from "~/lib/moderation-contract";
 import type {
@@ -119,6 +122,15 @@ async function auditPage(page: number): Promise<Page<AuditItem>> {
       action: entry.action,
       actorHandle: entry.actorHandle,
       actorKind: entry.actorKind,
+      actorSessionId:
+        entry.actorKind === "script" &&
+        entry.details &&
+        typeof entry.details === "object" &&
+        "cliSessionId" in entry.details &&
+        typeof entry.details.cliSessionId === "string" &&
+        CLI_SESSION_ID.test(entry.details.cliSessionId)
+          ? entry.details.cliSessionId
+          : null,
       targetType: entry.targetType,
       targetId: entry.targetId,
       reportId: entry.reportId,

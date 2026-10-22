@@ -3,12 +3,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { MemberRecord } from "~/db/queries/members";
 
 const findMemberById = vi.fn();
+const findLiveCliSession = vi.fn();
 const setSuspended = vi.fn();
 const findReport = vi.fn();
 const setReportStatus = vi.fn();
 const writeAudit = vi.fn();
 const getRoom = vi.fn();
 
+vi.mock("~/db/queries/cli-sessions", () => ({
+  findLiveCliSession: (...a: unknown[]) => findLiveCliSession(...a),
+}));
 vi.mock("~/db/queries/members", () => ({
   findMemberById: (...a: unknown[]) => findMemberById(...a),
   setSuspended: (...a: unknown[]) => setSuspended(...a),
@@ -28,7 +32,6 @@ vi.mock("~/lib/room.server", () => ({
 
 const { performModeration, MOD_INTENTS, isModIntent } =
   await import("~/lib/moderation.server");
-const { ModerationError } = await import("~/lib/require-role.server");
 const { ROOM_IDS } = await import("~/lib/rooms");
 
 /** One enforcement call per room: suspension and the kill switch fan out (VRIP-12). */
@@ -73,6 +76,7 @@ function room() {
 beforeEach(() => {
   order = [];
   vi.clearAllMocks();
+  findLiveCliSession.mockResolvedValue({ id: ACTOR.sessionId });
   getRoom.mockResolvedValue(room());
   findReport.mockResolvedValue({
     id: "r1",
@@ -104,76 +108,40 @@ beforeEach(() => {
 
 const FIELDS = { reportId: "r1", memberId: "m2", killed: true };
 
-describe("role enforcement", () => {
-  it("refuses every action for a non-moderator", async () => {
-    const student = member({ isModerator: false });
+const ACTOR = {
+  kind: "script" as const,
+  sessionId: "10000000-0000-4000-8000-000000000001",
+  tokenHash: "a".repeat(64),
+  origin: "https://vrooms.test",
+};
+
+describe("session enforcement", () => {
+  it("refuses stale sessions before every mutation", async () => {
+    findLiveCliSession.mockResolvedValue(null);
     for (const intent of MOD_INTENTS) {
       await expect(
-        performModeration({ member: student, kind: "console" }, intent, FIELDS),
-      ).rejects.toMatchObject({ code: "not_moderator" });
-    }
-    // Nothing reached enforcement or the record.
-    expect(order).toEqual([]);
-  });
-
-  it("refuses a tombstoned moderator", async () => {
-    const gone = member({ deletedAt: new Date() });
-    await expect(
-      performModeration({ member: gone, kind: "console" }, "suspend", FIELDS),
-    ).rejects.toMatchObject({ code: "not_moderator" });
-  });
-
-  it("refuses every action for a suspended moderator", async () => {
-    // Suspension is the product's only remedy against a moderator. A guard that
-    // reads deletedAt but not suspendedAt leaves the suspended account the kill
-    // switch and restore on itself.
-    const suspended = member({ suspendedAt: new Date() });
-    for (const intent of MOD_INTENTS) {
-      await expect(
-        performModeration(
-          { member: suspended, kind: "console" },
-          intent,
-          FIELDS,
-        ),
-      ).rejects.toMatchObject({ code: "not_moderator" });
+        performModeration(ACTOR, intent, FIELDS),
+      ).rejects.toMatchObject({ code: "bad_token" });
     }
     expect(order).toEqual([]);
+    expect(findMemberById).not.toHaveBeenCalled();
+    expect(findReport).not.toHaveBeenCalled();
   });
 
-  it("refuses a device-key member even if it was flagged as a moderator", async () => {
-    // Moderation needs an accountable person, so a handle with no V Auth
-    // account behind it never acts, whatever its flag says (VRIP-13).
-    const anonymous = member({ userId: null });
-    for (const intent of MOD_INTENTS) {
-      await expect(
-        performModeration(
-          { member: anonymous, kind: "script" },
-          intent,
-          FIELDS,
-        ),
-      ).rejects.toMatchObject({ code: "not_moderator" });
-    }
-    expect(order).toEqual([]);
-  });
-
-  it("refuses a suspended moderator at the script door too", async () => {
-    const suspended = member({ suspendedAt: new Date() });
-    await expect(
-      performModeration({ member: suspended, kind: "script" }, "restore", {
-        memberId: "m1",
+  it("rechecks all credential fields at the shared boundary", async () => {
+    await performModeration(ACTOR, "set_room_state", FIELDS);
+    expect(findLiveCliSession).toHaveBeenCalledWith(
+      ACTOR.tokenHash,
+      ACTOR.origin,
+      ACTOR.sessionId,
+    );
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorKind: "script",
+        actorMemberId: null,
+        details: { cliSessionId: ACTOR.sessionId },
       }),
-    ).rejects.toMatchObject({ code: "not_moderator" });
-  });
-
-  it("applies the same check to the script front door", async () => {
-    const student = member({ isModerator: false });
-    await expect(
-      performModeration(
-        { member: student, kind: "script" },
-        "set_room_state",
-        FIELDS,
-      ),
-    ).rejects.toBeInstanceOf(ModerationError);
+    );
   });
 
   it("recognises exactly the five documented intents, and reveal is not one", () => {
@@ -192,9 +160,35 @@ describe("role enforcement", () => {
   });
 });
 
+describe("CLI mutation audit", () => {
+  it.each(MOD_INTENTS)(
+    "snapshots a session and no member or credential for %s",
+    async (intent) => {
+      await performModeration(ACTOR, intent, FIELDS);
+      expect(writeAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorKind: "script",
+          actorMemberId: null,
+          details: expect.objectContaining({ cliSessionId: ACTOR.sessionId }),
+        }),
+      );
+      const serialized = JSON.stringify(writeAudit.mock.calls);
+      expect(serialized).not.toContain(ACTOR.tokenHash);
+      expect(serialized).not.toContain(ACTOR.origin);
+      if (["delete_message", "dismiss_report", "suspend"].includes(intent)) {
+        expect(setReportStatus).toHaveBeenCalledWith(
+          "r1",
+          expect.any(String),
+          null,
+        );
+      }
+    },
+  );
+});
+
 describe("ordering: enforcement first, record second", () => {
   it("suspends in every room before writing Neon and the audit row", async () => {
-    await performModeration({ member: member(), kind: "console" }, "suspend", {
+    await performModeration(ACTOR, "suspend", {
       memberId: "m2",
     });
     expect(order).toEqual([...EVERY_ROOM, "neon", "audit"]);
@@ -204,16 +198,12 @@ describe("ordering: enforcement first, record second", () => {
   });
 
   it("also resolves the report when the suspension came from one", async () => {
-    await performModeration(
-      { member: member(), kind: "console" },
-      "suspend",
-      FIELDS,
-    );
+    await performModeration(ACTOR, "suspend", FIELDS);
     expect(order).toEqual([...EVERY_ROOM, "neon", "neon", "audit"]);
   });
 
   it("restores in every room, so a restored handle is not still silenced somewhere", async () => {
-    await performModeration({ member: member(), kind: "console" }, "restore", {
+    await performModeration(ACTOR, "restore", {
       memberId: "m2",
     });
     expect(order).toEqual([...EVERY_ROOM, "neon", "audit"]);
@@ -232,11 +222,7 @@ describe("ordering: enforcement first, record second", () => {
       status: "open",
       createdAt: new Date(),
     });
-    await performModeration(
-      { member: member(), kind: "console" },
-      "delete_message",
-      FIELDS,
-    );
+    await performModeration(ACTOR, "delete_message", FIELDS);
     expect(order).toEqual(["do", "neon", "audit"]);
     expect(getRoom).toHaveBeenCalledOnce();
     expect(getRoom).toHaveBeenCalledWith("hostel");
@@ -255,21 +241,13 @@ describe("ordering: enforcement first, record second", () => {
       createdAt: new Date(),
     });
     await expect(
-      performModeration(
-        { member: member(), kind: "console" },
-        "delete_message",
-        FIELDS,
-      ),
+      performModeration(ACTOR, "delete_message", FIELDS),
     ).rejects.toMatchObject({ code: "room_unreachable" });
     expect(order).toEqual([]);
   });
 
   it("closes every room before recording it, under one audit row", async () => {
-    await performModeration(
-      { member: member(), kind: "console" },
-      "set_room_state",
-      FIELDS,
-    );
+    await performModeration(ACTOR, "set_room_state", FIELDS);
     expect(order).toEqual([...EVERY_ROOM, "audit"]);
     expect(writeAudit).toHaveBeenCalledOnce();
     expect(writeAudit).toHaveBeenCalledWith(
@@ -280,11 +258,7 @@ describe("ordering: enforcement first, record second", () => {
   it("writes nothing to Neon when the object is unreachable", async () => {
     getRoom.mockRejectedValue(new Error("no binding"));
     await expect(
-      performModeration(
-        { member: member(), kind: "console" },
-        "suspend",
-        FIELDS,
-      ),
+      performModeration(ACTOR, "suspend", FIELDS),
     ).rejects.toMatchObject({ code: "room_unreachable" });
     expect(order).toEqual([]);
     expect(setSuspended).not.toHaveBeenCalled();
@@ -297,11 +271,7 @@ describe("ordering: enforcement first, record second", () => {
       return room();
     });
     await expect(
-      performModeration(
-        { member: member(), kind: "console" },
-        "suspend",
-        FIELDS,
-      ),
+      performModeration(ACTOR, "suspend", FIELDS),
     ).rejects.toMatchObject({ code: "room_unreachable" });
     expect(setSuspended).not.toHaveBeenCalled();
     expect(writeAudit).not.toHaveBeenCalled();
@@ -314,7 +284,7 @@ describe("error paths", () => {
       id === "m1" ? member() : null,
     );
     await expect(
-      performModeration({ member: member(), kind: "console" }, "suspend", {
+      performModeration(ACTOR, "suspend", {
         memberId: "m2",
       }),
     ).rejects.toMatchObject({ code: "member_not_found" });
@@ -325,7 +295,7 @@ describe("error paths", () => {
       id === "m1" ? member() : member({ id: "m2", pseudonym: null }),
     );
     await expect(
-      performModeration({ member: member(), kind: "console" }, "suspend", {
+      performModeration(ACTOR, "suspend", {
         memberId: "m2",
       }),
     ).rejects.toMatchObject({ code: "member_not_found" });
@@ -334,20 +304,12 @@ describe("error paths", () => {
   it("reports an already-closed report on dismiss", async () => {
     setReportStatus.mockResolvedValue(false);
     await expect(
-      performModeration(
-        { member: member(), kind: "console" },
-        "dismiss_report",
-        FIELDS,
-      ),
+      performModeration(ACTOR, "dismiss_report", FIELDS),
     ).rejects.toMatchObject({ code: "already_resolved" });
   });
 
   it("dismiss has no object leg, because nothing a student can do changes", async () => {
-    await performModeration(
-      { member: member(), kind: "console" },
-      "dismiss_report",
-      FIELDS,
-    );
+    await performModeration(ACTOR, "dismiss_report", FIELDS);
     expect(order).toEqual(["neon", "audit"]);
   });
 });

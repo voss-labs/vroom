@@ -17,7 +17,9 @@ export const USAGE = `V Rooms moderation
   npm run mod -- dismiss <reportId>
 
 Pages are zero based. Explicit commands execute without confirmation.
-Environment: VROOMS_ORIGIN, MOD_SCRIPT_TOKEN`;
+Environment: DATABASE_URL, VROOMS_ORIGIN
+DATABASE_URL must permit registration of temporary CLI sessions.
+Each invocation checks the Worker session before executing an operation.`;
 
 export type RequestCommand = {
   kind: "request";
